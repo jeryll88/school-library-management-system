@@ -54,12 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                     if ($isPasswordValid) {
                         session_regenerate_id(true);
-                        $_SESSION['user_id']    = (int)$user['user_id'];
-                        $_SESSION['username']   = $user['username'];
-                        $_SESSION['full_name']  = $user['full_name'];
-                        $_SESSION['role']       = $user['role'];
-                        $_SESSION['student_id'] = $user['student_id'];
-                        $_SESSION['logged_in']  = true;
+                        setSessionUser($user);
 
                         // Role-based redirection
                         if ($user['role'] === 'Admin') {

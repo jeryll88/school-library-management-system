@@ -42,6 +42,14 @@ function toast(msg, type = 'success') {
 }
 
 async function api(url, method = 'GET', body = null) {
+    // Resolve relative API paths cleanly for both local subfolder (XAMPP) and root domain (Vercel)
+    const base = (window.API_BASE || '').replace(/\/+$/, '');
+    let resolvedUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        const cleanUrl = url.replace(/^\/+/, '');
+        resolvedUrl = base ? `${base}/${cleanUrl}` : `/${cleanUrl}`;
+    }
+
     const opts = {
         method,
         credentials: 'same-origin',
@@ -51,14 +59,14 @@ async function api(url, method = 'GET', body = null) {
         },
     };
     if (body) opts.body = JSON.stringify(body);
-    const res = await fetch(url, opts);
+    const res = await fetch(resolvedUrl, opts);
     // Guard against non-JSON responses (PHP errors, HTML pages)
     const text = await res.text();
     let data;
     try {
         data = JSON.parse(text);
     } catch (e) {
-        console.error('Non-JSON API response:', text.substring(0, 500));
+        console.error('Non-JSON API response from:', resolvedUrl, text.substring(0, 500));
         throw new Error('Server returned an unexpected response. Check console for details.');
     }
     if (!res.ok) throw new Error(data.error || 'API error');

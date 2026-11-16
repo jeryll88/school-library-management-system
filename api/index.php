@@ -3,16 +3,15 @@
  * Vercel Serverless Single-Function Router & API Gateway
  */
 
-if (session_status() === PHP_SESSION_NONE) {
-    @session_save_path('/tmp');
-}
+require_once __DIR__ . '/../server/config/auth.php';
+startAppSession();
 
 $uri = $_SERVER['REQUEST_URI'] ?? '/';
 $path = parse_url($uri, PHP_URL_PATH);
 $path = '/' . trim($path, '/');
 
-// 1. API Endpoints
-if (preg_match('#^/api/([a-zA-Z0-9_-]+)(\.php)?$#', $path, $matches)) {
+// 1. API Endpoints (matches /api/endpoint, /server/api/endpoint, with or without .php)
+if (preg_match('#^/(?:server/)?api/([a-zA-Z0-9_-]+)(?:\.php)?$#', $path, $matches)) {
     $endpoint = $matches[1];
     
     // Health check endpoint

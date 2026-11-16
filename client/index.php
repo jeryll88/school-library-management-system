@@ -235,9 +235,21 @@ $displayRole  = ($currentUser['role'] === 'User') ? 'Student' : $currentUser['ro
     <div id="toast-container"></div>
 
     <!-- ===== APP JS ===== -->
+    <?php
+    $sn = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+    if (strpos($sn, '/client/') !== false) {
+        $apiBase = substr($sn, 0, strpos($sn, '/client/'));
+    } elseif (strpos($sn, '/api/') !== false) {
+        $apiBase = '';
+    } else {
+        $d = dirname($sn);
+        $apiBase = ($d === '/' || $d === '\\' || $d === '.') ? '' : rtrim($d, '/');
+    }
+    ?>
     <script>
         window.CURRENT_USER = <?= json_encode($currentUser, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
         window.CSRF_TOKEN = <?= json_encode(getCsrfToken()) ?>;
+        window.API_BASE = <?= json_encode($apiBase) ?>;
 
         // ── Mobile Sidebar Toggle ──────────────────────────────────────────
         function toggleSidebar() {
