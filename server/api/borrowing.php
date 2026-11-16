@@ -146,10 +146,10 @@ switch ($method) {
             ], 400);
         }
 
-        $maxQuota = 1;
+        $maxQuota = 5;
         if ($activeCount >= $maxQuota) {
             jsonResponse([
-                'error' => "Borrowing limit reached: Students are only allowed to borrow 1 book at a time. This student already has {$activeCount} active borrowed book."
+                'error' => "Borrowing limit reached: Students can borrow a maximum of 5 books at a time. This student already has {$activeCount} active borrowed books. Returning borrowed books will restore their available quota."
             ], 400);
         }
 

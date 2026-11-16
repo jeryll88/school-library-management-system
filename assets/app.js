@@ -409,9 +409,13 @@ function renderStudentDashboard(data) {
             <div>
                 <div class="text-xs text-slate-500 font-semibold flex items-center gap-1.5">
                     <span>Active Borrowing</span>
-                    <span class="text-[9px] bg-blue-100 text-blue-700 px-1 py-0.2 rounded font-bold">Quota: ${s.borrow_quota || 1}</span>
+                    <span class="text-[9px] bg-blue-100 text-blue-700 px-1.5 py-0.2 rounded font-bold">Limit: 5 Books</span>
                 </div>
-                <div class="text-2xl font-black text-slate-800">${s.my_borrowed || 0} <span class="text-xs text-slate-400 font-semibold">/ ${s.borrow_quota || 1}</span></div>
+                <div class="text-2xl font-black text-slate-800">${s.my_borrowed || 0} <span class="text-xs text-slate-400 font-semibold">/ 5</span></div>
+                <div class="text-[11px] font-semibold mt-0.5 ${(5 - (s.my_borrowed || 0)) > 0 ? 'text-emerald-600' : 'text-amber-600'}">
+                    <i class="fa-solid ${(5 - (s.my_borrowed || 0)) > 0 ? 'fa-circle-check' : 'fa-circle-exclamation'} text-[10px]"></i>
+                    ${(5 - (s.my_borrowed || 0)) > 0 ? `${(5 - (s.my_borrowed || 0))} available slots` : 'All 5 slots used (return books to restore)'}
+                </div>
             </div>
         </div>
         <div class="stat-card ${s.my_overdue > 0 ? 'border-rose-300 bg-rose-50/30' : ''}">

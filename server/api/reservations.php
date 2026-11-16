@@ -152,24 +152,27 @@ switch ($method) {
             jsonResponse(['error' => 'You already have an active borrowed copy of "' . $dupRow['title'] . '". Students can only borrow 1 copy of a book.'], 400);
         }
 
-        // Enforce 1-book borrowing quota
+        // Enforce 5-book borrowing quota
+        $maxQuota = 5;
         $activeBorrowCheck = $db->prepare("
             SELECT COUNT(*) FROM borrowing_records 
             WHERE user_id = :u AND status IN ('Borrowed', 'Overdue')
         ");
         $activeBorrowCheck->execute([':u' => $targetUser]);
-        if ((int)$activeBorrowCheck->fetchColumn() >= 1) {
-            jsonResponse(['error' => 'Borrowing limit reached: Students can only borrow 1 book at a time. Please return your current borrowed book before requesting another.'], 400);
+        $activeBorrowCount = (int)$activeBorrowCheck->fetchColumn();
+        if ($activeBorrowCount >= $maxQuota) {
+            jsonResponse(['error' => "Borrowing limit reached: You currently have {$activeBorrowCount} active borrowed books (maximum limit is 5). Please return a book to free up your borrowing quota before reserving another."], 400);
         }
 
-        // Limit active reservations to 1 at a time
+        // Check active reservations (total borrowed + reserved cannot exceed 5)
         $activeResCheck = $db->prepare("
             SELECT COUNT(*) FROM reservations 
             WHERE user_id = :u AND status IN ('Pending', 'Approved')
         ");
         $activeResCheck->execute([':u' => $targetUser]);
-        if ((int)$activeResCheck->fetchColumn() >= 1) {
-            jsonResponse(['error' => 'Reservation limit reached: You can only have 1 active book hold at a time.'], 400);
+        $activeResCount = (int)$activeResCheck->fetchColumn();
+        if (($activeBorrowCount + $activeResCount) >= $maxQuota) {
+            jsonResponse(['error' => "Reservation limit reached: You have {$activeBorrowCount} active borrowed book(s) and {$activeResCount} active hold(s). Maximum total allowed is 5. Please return a book to restore your quota slots."], 400);
         }
 
         // Verify book exists and has available copies before allowing reservation
@@ -333,15 +336,30 @@ switch ($method) {
                     jsonResponse(['error' => 'This copy already has an active borrowing record. Cannot fulfill.'], 409);
                 }
 
-                // Prevent duplicate: check if student already has active borrow (quota = 1)
-                $dupUserBorrow = $db->prepare("
-                    SELECT borrow_id FROM borrowing_records 
+                // Prevent exceeding quota: check if student already has 5 active borrowed books
+                $maxQuota = 5;
+                $userBorrowCheck = $db->prepare("
+                    SELECT COUNT(*) FROM borrowing_records 
                     WHERE user_id = :uid AND status IN ('Borrowed', 'Overdue')
+                ");
+                $userBorrowCheck->execute([':uid' => (int)$res['user_id']]);
+                $currLoans = (int)$userBorrowCheck->fetchColumn();
+                if ($currLoans >= $maxQuota) {
+                    jsonResponse(['error' => "Borrowing limit reached: This student already has {$currLoans} active borrowed books (maximum limit is 5). Cannot fulfill reservation until a book is returned."], 409);
+                }
+
+                // Prevent duplicate copy of the same book
+                $dupBookCheck = $db->prepare("
+                    SELECT br.borrow_id, b.title
+                    FROM borrowing_records br
+                    JOIN book_copies bc ON br.copy_id = bc.copy_id
+                    JOIN books b ON bc.book_id = b.book_id
+                    WHERE br.user_id = :uid AND bc.book_id = :bid AND br.status IN ('Borrowed', 'Overdue')
                     LIMIT 1
                 ");
-                $dupUserBorrow->execute([':uid' => (int)$res['user_id']]);
-                if ($dupUserBorrow->fetch()) {
-                    jsonResponse(['error' => 'This student already has an active borrowed book. Cannot fulfill reservation until current book is returned.'], 409);
+                $dupBookCheck->execute([':uid' => (int)$res['user_id'], ':bid' => $bookId]);
+                if ($dupBookRow = $dupBookCheck->fetch()) {
+                    jsonResponse(['error' => "This student already has an active borrowed copy of \"{$dupBookRow['title']}\". Students can only borrow 1 copy per book."], 409);
                 }
 
                 // Update copy status to Borrowed
