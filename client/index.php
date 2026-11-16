@@ -41,6 +41,9 @@ $displayRole  = ($currentUser['role'] === 'User') ? 'Student' : $currentUser['ro
 </head>
 <body class="flex h-screen overflow-hidden">
 
+    <!-- ===== SIDEBAR OVERLAY (mobile) ===== -->
+    <div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
     <!-- ===== SIDEBAR ===== -->
     <aside id="sidebar" class="bg-navy-900 text-white flex flex-col overflow-y-auto shrink-0">
         <!-- Brand -->
@@ -177,12 +180,16 @@ $displayRole  = ($currentUser['role'] === 'User') ? 'Student' : $currentUser['ro
     <!-- ===== MAIN AREA ===== -->
     <div class="flex-1 flex flex-col overflow-hidden">
         <!-- Top Header Bar -->
-        <header class="bg-white border-b border-slate-200 px-5 py-2.5 flex items-center justify-between shrink-0 shadow-sm">
-            <div class="flex items-center gap-3">
+        <header class="bg-white border-b border-slate-200 px-3 sm:px-5 py-2.5 flex items-center justify-between shrink-0 shadow-sm">
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Hamburger (mobile only) -->
+                <button id="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle menu">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
                 <div class="relative">
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                     <input id="global-search" type="text" placeholder="Search anything..."
-                        class="pl-8 pr-4 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:border-blue-400 w-56 transition-colors">
+                        class="pl-8 pr-4 py-1.5 text-sm border border-slate-200 rounded-lg bg-slate-50 focus:outline-none focus:border-blue-400 w-40 sm:w-56 transition-colors">
                 </div>
             </div>
             <div class="flex items-center gap-4">
@@ -211,7 +218,7 @@ $displayRole  = ($currentUser['role'] === 'User') ? 'Student' : $currentUser['ro
         </header>
 
         <!-- Page Content -->
-        <main class="flex-1 overflow-y-auto bg-slate-50 p-5" id="main-content">
+        <main class="flex-1 overflow-y-auto bg-slate-50 p-3 sm:p-5" id="main-content">
             <div id="page-content">
                 <!-- Loaded dynamically by app.js -->
                 <div class="flex items-center justify-center h-64">
@@ -231,6 +238,24 @@ $displayRole  = ($currentUser['role'] === 'User') ? 'Student' : $currentUser['ro
     <script>
         window.CURRENT_USER = <?= json_encode($currentUser, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
         window.CSRF_TOKEN = <?= json_encode(getCsrfToken()) ?>;
+
+        // ── Mobile Sidebar Toggle ──────────────────────────────────────────
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('active');
+        }
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+            document.getElementById('sidebar-overlay').classList.remove('active');
+        }
+        // Close sidebar when a nav item is clicked on mobile
+        document.querySelectorAll('.nav-item').forEach(el => {
+            el.addEventListener('click', () => {
+                if (window.innerWidth <= 1024) closeSidebar();
+            });
+        });
     </script>
     <script src="assets/app.js"></script>
 </body>

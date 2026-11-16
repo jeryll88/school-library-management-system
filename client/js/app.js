@@ -44,6 +44,7 @@ function toast(msg, type = 'success') {
 async function api(url, method = 'GET', body = null) {
     const opts = {
         method,
+        credentials: 'same-origin',
         headers: {
             'Content-Type': 'application/json',
             'X-CSRF-Token': window.CSRF_TOKEN || '',
@@ -51,7 +52,15 @@ async function api(url, method = 'GET', body = null) {
     };
     if (body) opts.body = JSON.stringify(body);
     const res = await fetch(url, opts);
-    const data = await res.json();
+    // Guard against non-JSON responses (PHP errors, HTML pages)
+    const text = await res.text();
+    let data;
+    try {
+        data = JSON.parse(text);
+    } catch (e) {
+        console.error('Non-JSON API response:', text.substring(0, 500));
+        throw new Error('Server returned an unexpected response. Check console for details.');
+    }
     if (!res.ok) throw new Error(data.error || 'API error');
     return data;
 }
@@ -366,7 +375,7 @@ function renderStudentDashboard(data) {
     </div>
 
     <!-- Student 4 Quick Stats -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6 stats-grid">
         <div class="stat-card cursor-pointer hover:border-blue-300 transition-colors" onclick="navigateTo('borrowing')">
             <div class="stat-icon bg-blue-50 text-blue-600"><i class="fa-solid fa-book-bookmark"></i></div>
             <div>
@@ -460,7 +469,7 @@ function renderStudentDashboard(data) {
                 </span>
                 <button onclick="navigateTo('borrowing')" class="text-blue-600 font-semibold text-xs hover:underline">View History →</button>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto table-wrap">
                 <table class="ui-table">
                     <thead><tr>
                         <th>#</th><th>Book Title</th><th>Borrow Date</th><th>Due Date</th><th>Returned Date</th><th>Status</th>
@@ -478,7 +487,7 @@ function renderStudentDashboard(data) {
                 </span>
                 <button onclick="navigateTo('reservations')" class="text-blue-600 font-semibold text-xs hover:underline">Manage →</button>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto table-wrap">
                 <table class="ui-table">
                     <thead><tr>
                         <th>#</th><th>Book Title</th><th>Reserved Date</th><th>Status</th><th class="text-center">Action</th>
@@ -609,7 +618,7 @@ function renderLibrarianDashboard(data) {
                 </span>
                 <button onclick="navigateTo('reservations')" class="text-blue-600 font-semibold text-xs hover:underline">View All →</button>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto table-wrap">
                 <table class="ui-table">
                     <thead><tr>
                         <th>#</th><th>Student/User</th><th>Book Title</th><th>Date</th><th>Status</th><th class="text-center">Action</th>
@@ -627,7 +636,7 @@ function renderLibrarianDashboard(data) {
                 </span>
                 <button onclick="navigateTo('borrowing')" class="text-blue-600 font-semibold text-xs hover:underline">View All →</button>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto table-wrap">
                 <table class="ui-table">
                     <thead><tr>
                         <th>#</th><th>Student/User</th><th>Book Title</th><th>Borrow Date</th><th>Due Date</th><th>Returned Date</th><th>Status</th><th class="text-center">Action</th>
@@ -753,7 +762,7 @@ function renderAdminDashboard(data) {
                     </button>
                 </div>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto table-wrap">
                 <table class="ui-table">
                     <thead><tr><th>Student ID</th><th>Full Name</th><th>Course</th><th>Year</th></tr></thead>
                     <tbody>${studentRows}</tbody>
@@ -776,7 +785,7 @@ function renderAdminDashboard(data) {
                     </button>
                 </div>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto table-wrap">
                 <table class="ui-table">
                     <thead><tr><th>User ID</th><th>Username</th><th>Role</th><th>Status</th></tr></thead>
                     <tbody>${userRows}</tbody>
@@ -793,7 +802,7 @@ function renderAdminDashboard(data) {
             </span>
             <button onclick="navigateTo('borrowing')" class="text-blue-600 font-semibold text-xs hover:underline">View All Records →</button>
         </div>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-wrap">
             <table class="ui-table">
                 <thead><tr>
                     <th>#</th><th>Student/User</th><th>Book Title</th><th>Borrow Date</th><th>Due Date</th><th>Returned Date</th><th>Status</th>
@@ -812,7 +821,7 @@ function renderAdminDashboard(data) {
                 </h4>
                 <button onclick="navigateTo('courses')" class="text-blue-600 font-bold text-[10px] hover:underline">Manage Courses →</button>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto table-wrap">
                 <table class="ui-table">
                     <thead><tr><th>Course ID</th><th>Course Code</th></tr></thead>
                     <tbody>${courseRows}</tbody>
@@ -827,7 +836,7 @@ function renderAdminDashboard(data) {
                 </h4>
                 <button onclick="navigateTo('categories')" class="text-blue-600 font-bold text-[10px] hover:underline">Manage Categories →</button>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto table-wrap">
                 <table class="ui-table">
                     <thead><tr><th>Category ID</th><th>Category Name</th></tr></thead>
                     <tbody>${categoryRows}</tbody>
@@ -998,7 +1007,7 @@ async function renderBooks(page = 1, search = '', categoryId = '', availOnly = f
                 <span>Export CSV</span>
             </button>` : ''}
         </div>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-wrap">
             <table class="ui-table">
                 <thead><tr>
                     <th>Book ID</th><th>Title</th><th>Author</th><th>Category</th>
@@ -1327,7 +1336,7 @@ async function renderBookCopies(page = 1, search = '') {
                         class="form-input pl-8" oninput="debounce(() => renderBookCopies(1, this.value), 400)()">
                 </div>
             </div>
-            <div class="overflow-x-auto">
+            <div class="overflow-x-auto table-wrap">
                 <table class="ui-table">
                     <thead><tr><th>Copy ID</th><th>Book Title</th><th>Author</th><th>Barcode</th><th>Status</th><th class="text-center">Actions</th></tr></thead>
                     <tbody>${rows}</tbody>
@@ -1505,7 +1514,7 @@ async function renderBorrowing(page = 1, search = '', status = '') {
                 ${statusOptions}
             </select>
         </div>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-wrap">
             <table class="ui-table">
                 <thead><tr>
                     <th>Borrow ID</th>
@@ -1686,7 +1695,7 @@ async function renderReservations(page = 1, search = '', status = '') {
                 ${statusOptions}
             </select>
         </div>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-wrap">
             <table class="ui-table">
                 <thead><tr>
                     <th>Res. ID</th>
@@ -1846,7 +1855,7 @@ async function renderStudents(page = 1, search = '') {
                     class="form-input pl-8" oninput="debounce(() => renderStudents(1, this.value), 400)()">
             </div>
         </div>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-wrap">
             <table class="ui-table">
                 <thead><tr>
                     <th>School ID</th><th>Name</th><th>Gender</th><th class="text-center">Year</th>
@@ -2025,7 +2034,7 @@ async function renderUsers(page = 1, search = '') {
                     class="form-input pl-8" oninput="debounce(() => renderUsers(1, this.value), 400)()">
             </div>
         </div>
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-wrap">
             <table class="ui-table">
                 <thead><tr><th>User ID</th><th>Full Name</th><th>Employee ID</th><th>Username</th><th>Email</th><th>Status</th><th>Joined</th><th>Actions</th></tr></thead>
                 <tbody>${rows}</tbody>
@@ -2288,7 +2297,7 @@ async function renderCourses() {
         <p class="text-sm text-slate-500">All registered academic courses (${data.data?.length || 0} total)</p>
     </div>
     <div class="section-card">
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-wrap">
             <table class="ui-table">
                 <thead><tr><th>#</th><th>Course Code</th><th>Course Name</th></tr></thead>
                 <tbody>${rows}</tbody>
@@ -2355,7 +2364,7 @@ async function renderCategories(filterType = 'all') {
     </div>
 
     <div class="section-card">
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto table-wrap">
             <table class="ui-table">
                 <thead><tr><th>Category ID</th><th>Name</th><th>Classification</th><th>Description</th><th class="text-center">Books</th><th class="text-center">Actions</th></tr></thead>
                 <tbody>${rows}</tbody>

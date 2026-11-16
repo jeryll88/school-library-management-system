@@ -1,4 +1,6 @@
 <?php
+error_reporting(0);
+ob_start();
 header('Content-Type: application/json');
 require_once __DIR__ . '/../config/db.php';
 

@@ -1,6 +1,13 @@
 <?php
+// Suppress PHP warnings/notices from leaking into JSON responses
+error_reporting(0);
+ob_start();
+
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/auth.php';
+
+// Discard any accidental output before headers
+ob_clean();
 header('Content-Type: application/json');
 header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
