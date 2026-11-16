@@ -138,6 +138,40 @@ switch ($method) {
             jsonResponse(['error' => 'You already have an active reservation for this book.'], 400);
         }
 
+        // Check if student already has an active borrowed copy of this book (cannot borrow duplicates/similar copies)
+        $dupBorrow = $db->prepare("
+            SELECT br.borrow_id, b.title
+            FROM borrowing_records br
+            JOIN book_copies bc ON br.copy_id = bc.copy_id
+            JOIN books b ON bc.book_id = b.book_id
+            WHERE br.user_id = :u AND bc.book_id = :b AND br.status IN ('Borrowed', 'Overdue')
+            LIMIT 1
+        ");
+        $dupBorrow->execute([':u' => $targetUser, ':b' => $input['book_id']]);
+        if ($dupRow = $dupBorrow->fetch()) {
+            jsonResponse(['error' => 'You already have an active borrowed copy of "' . $dupRow['title'] . '". Students can only borrow 1 copy of a book.'], 400);
+        }
+
+        // Enforce 1-book borrowing quota
+        $activeBorrowCheck = $db->prepare("
+            SELECT COUNT(*) FROM borrowing_records 
+            WHERE user_id = :u AND status IN ('Borrowed', 'Overdue')
+        ");
+        $activeBorrowCheck->execute([':u' => $targetUser]);
+        if ((int)$activeBorrowCheck->fetchColumn() >= 1) {
+            jsonResponse(['error' => 'Borrowing limit reached: Students can only borrow 1 book at a time. Please return your current borrowed book before requesting another.'], 400);
+        }
+
+        // Limit active reservations to 1 at a time
+        $activeResCheck = $db->prepare("
+            SELECT COUNT(*) FROM reservations 
+            WHERE user_id = :u AND status IN ('Pending', 'Approved')
+        ");
+        $activeResCheck->execute([':u' => $targetUser]);
+        if ((int)$activeResCheck->fetchColumn() >= 1) {
+            jsonResponse(['error' => 'Reservation limit reached: You can only have 1 active book hold at a time.'], 400);
+        }
+
         // Verify book exists and has available copies before allowing reservation
         $bookCheck = $db->prepare("
             SELECT b.book_id, b.title,

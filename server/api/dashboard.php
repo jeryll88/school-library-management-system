@@ -133,7 +133,7 @@ try {
                 'my_due_soon'     => $dueSoonCount,
                 'my_reservations' => $reserveCount,
                 'my_returned'     => $returnedCount,
-                'borrow_quota'    => 3,
+                'borrow_quota'    => 1,
                 'total_catalog'   => count($featuredBooks),
             ],
             'my_borrowings'   => $myBorrowings,

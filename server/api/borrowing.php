@@ -129,18 +129,37 @@ switch ($method) {
             ], 400);
         }
 
-        $maxQuota = 3;
+        $maxQuota = 1;
         if ($activeCount >= $maxQuota) {
             jsonResponse([
-                'error' => "Borrowing quota reached: this student already has {$activeCount} active borrowed book(s). The maximum allowed quota is {$maxQuota} books at a time."
+                'error' => "Borrowing limit reached: Students are only allowed to borrow 1 book at a time. This student already has {$activeCount} active borrowed book."
             ], 400);
         }
 
-        // Check copy status
-        $copyStmt = $db->prepare("SELECT status FROM book_copies WHERE copy_id = :id");
+        // Check copy status and get parent book_id
+        $copyStmt = $db->prepare("SELECT copy_id, book_id, barcode, status FROM book_copies WHERE copy_id = :id");
         $copyStmt->execute([':id' => $input['copy_id']]);
         $copy = $copyStmt->fetch();
         if (!$copy) jsonResponse(['error' => 'Book copy not found'], 404);
+
+        $targetBookId = (int)$copy['book_id'];
+
+        // Enforce: Student cannot borrow multiple copies of the same book
+        $dupBookCheck = $db->prepare("
+            SELECT br.borrow_id, b.title
+            FROM borrowing_records br
+            JOIN book_copies bc ON br.copy_id = bc.copy_id
+            JOIN books b ON bc.book_id = b.book_id
+            WHERE br.user_id = :uid AND bc.book_id = :bid AND br.status IN ('Borrowed', 'Overdue')
+            LIMIT 1
+        ");
+        $dupBookCheck->execute([':uid' => $targetStudentId, ':bid' => $targetBookId]);
+        $dupBook = $dupBookCheck->fetch();
+        if ($dupBook) {
+            jsonResponse([
+                'error' => "Students can only borrow 1 copy of a book. This student has already borrowed a copy of \"{$dupBook['title']}\"."
+            ], 400);
+        }
 
         // If copy is Reserved, verify whether it belongs to an Approved reservation for this student
         $approvedRes = null;
