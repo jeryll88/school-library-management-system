@@ -3,6 +3,10 @@
  * Vercel Serverless Single-Function Router & API Gateway
  */
 
+if (session_status() === PHP_SESSION_NONE) {
+    @session_save_path('/tmp');
+}
+
 $uri = $_SERVER['REQUEST_URI'] ?? '/';
 $path = parse_url($uri, PHP_URL_PATH);
 $path = '/' . trim($path, '/');
