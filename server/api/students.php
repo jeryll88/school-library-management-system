@@ -21,7 +21,7 @@ switch ($method) {
     case 'GET':
         $search = trim($_GET['search'] ?? '');
         $page   = max(1, (int)($_GET['page'] ?? 1));
-        $limit  = 10;
+        $limit  = min(5000, max(1, (int)($_GET['limit'] ?? 10)));
         $offset = ($page - 1) * $limit;
 
         $where  = [];

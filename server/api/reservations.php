@@ -156,14 +156,31 @@ switch ($method) {
             jsonResponse(['error' => 'All copies of "' . $bookRow['title'] . '" are currently borrowed or reserved. No copies available to reserve.'], 400);
         }
 
+        // Find the first available copy to assign and hold immediately (deducts stock)
+        $findCopy = $db->prepare("
+            SELECT copy_id FROM book_copies 
+            WHERE book_id = :book_id AND status = 'Available' 
+            ORDER BY copy_id ASC LIMIT 1
+        ");
+        $findCopy->execute([':book_id' => $input['book_id']]);
+        $copyRow = $findCopy->fetch();
+        if (!$copyRow) {
+            jsonResponse(['error' => 'All copies of "' . $bookRow['title'] . '" are currently borrowed or reserved.'], 400);
+        }
+        $reservedCopyId = (int)$copyRow['copy_id'];
+
+        // Immediately hold copy by marking as Reserved (available stock decreases by 1)
+        $db->prepare("UPDATE book_copies SET status = 'Reserved' WHERE copy_id = :copy_id")
+           ->execute([':copy_id' => $reservedCopyId]);
+
         $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
         if ($driver === 'pgsql') {
-            $stmt = $db->prepare("INSERT INTO reservations (user_id, book_id, status) VALUES (:user, :book, 'Pending') RETURNING reservation_id");
-            $stmt->execute([':user' => $targetUser, ':book' => $input['book_id']]);
+            $stmt = $db->prepare("INSERT INTO reservations (user_id, book_id, copy_id, status) VALUES (:user, :book, :copy, 'Pending') RETURNING reservation_id");
+            $stmt->execute([':user' => $targetUser, ':book' => $input['book_id'], ':copy' => $reservedCopyId]);
             $resId = $stmt->fetchColumn();
         } else {
-            $stmt = $db->prepare("INSERT INTO reservations (user_id, book_id, status) VALUES (:user, :book, 'Pending')");
-            $stmt->execute([':user' => $targetUser, ':book' => $input['book_id']]);
+            $stmt = $db->prepare("INSERT INTO reservations (user_id, book_id, copy_id, status) VALUES (:user, :book, :copy, 'Pending')");
+            $stmt->execute([':user' => $targetUser, ':book' => $input['book_id'], ':copy' => $reservedCopyId]);
             $resId = $db->lastInsertId();
         }
         jsonResponse(['success' => true, 'reservation_id' => $resId], 201);
@@ -188,8 +205,8 @@ switch ($method) {
                 jsonResponse(['error' => 'Reservation not found or cannot be cancelled'], 404);
             }
 
-            // If it was Approved, release the reserved copy back to Available (stock increases)
-            if ($currRes['status'] === 'Approved' && !empty($currRes['copy_id'])) {
+            // Release the reserved copy back to Available (stock increases)
+            if (!empty($currRes['copy_id'])) {
                 $db->prepare("UPDATE book_copies SET status = 'Available' WHERE copy_id = :copy_id AND status = 'Reserved'")
                    ->execute([':copy_id' => $currRes['copy_id']]);
             }
@@ -216,32 +233,31 @@ switch ($method) {
             $bookId          = (int)$res['book_id'];
             $existingCopyId  = $res['copy_id'];
 
-            if ($newStatus === 'Approved' && $oldStatus !== 'Approved') {
-                // When librarian APPROVES the reservation: find an Available copy of the book
-                $findCopy = $db->prepare("
-                    SELECT copy_id FROM book_copies 
-                    WHERE book_id = :book_id AND status = 'Available' 
-                    ORDER BY copy_id ASC LIMIT 1
-                ");
-                $findCopy->execute([':book_id' => $bookId]);
-                $copyRow = $findCopy->fetch();
-
-                if (!$copyRow) {
-                    jsonResponse(['error' => 'Cannot approve reservation: no available stock/copies left for this book.'], 409);
+            if ($newStatus === 'Approved') {
+                // Ensure copy is assigned and marked Reserved
+                if (empty($existingCopyId)) {
+                    $findCopy = $db->prepare("
+                        SELECT copy_id FROM book_copies 
+                        WHERE book_id = :book_id AND status = 'Available' 
+                        ORDER BY copy_id ASC LIMIT 1
+                    ");
+                    $findCopy->execute([':book_id' => $bookId]);
+                    $copyRow = $findCopy->fetch();
+                    if (!$copyRow) {
+                        jsonResponse(['error' => 'Cannot approve reservation: no available stock/copies left for this book.'], 409);
+                    }
+                    $existingCopyId = (int)$copyRow['copy_id'];
+                    $db->prepare("UPDATE book_copies SET status = 'Reserved' WHERE copy_id = :copy_id")
+                       ->execute([':copy_id' => $existingCopyId]);
+                } else {
+                    $db->prepare("UPDATE book_copies SET status = 'Reserved' WHERE copy_id = :copy_id")
+                       ->execute([':copy_id' => $existingCopyId]);
                 }
-
-                $reservedCopyId = (int)$copyRow['copy_id'];
-
-                // Deduct book stock by marking this physical copy as 'Reserved' (stock decreases by 1)
-                $db->prepare("UPDATE book_copies SET status = 'Reserved' WHERE copy_id = :copy_id")
-                   ->execute([':copy_id' => $reservedCopyId]);
-
-                // Link copy to the reservation and set Approved
                 $stmt = $db->prepare("UPDATE reservations SET status = 'Approved', copy_id = :copy_id WHERE reservation_id = :id");
-                $stmt->execute([':copy_id' => $reservedCopyId, ':id' => $id]);
+                $stmt->execute([':copy_id' => $existingCopyId, ':id' => $id]);
 
-            } elseif ($oldStatus === 'Approved' && in_array($newStatus, ['Cancelled', 'Pending', 'Rejected'], true)) {
-                // If previously Approved and now Cancelled, Rejected, or Pending: release copy back to Available (stock increases by 1)
+            } elseif (in_array($newStatus, ['Cancelled', 'Rejected'], true)) {
+                // If Cancelled or Rejected: release copy back to Available (stock increases by 1)
                 if (!empty($existingCopyId)) {
                     $db->prepare("UPDATE book_copies SET status = 'Available' WHERE copy_id = :copy_id AND status = 'Reserved'")
                        ->execute([':copy_id' => $existingCopyId]);
@@ -249,8 +265,56 @@ switch ($method) {
                 $stmt = $db->prepare("UPDATE reservations SET status = :status, copy_id = NULL WHERE reservation_id = :id");
                 $stmt->execute([':status' => $newStatus, ':id' => $id]);
 
+            } elseif ($newStatus === 'Fulfilled') {
+                // When marking as Fulfilled: transition copy to Borrowed and insert into borrowing_records
+                if (empty($existingCopyId)) {
+                    $findCopy = $db->prepare("
+                        SELECT copy_id FROM book_copies 
+                        WHERE book_id = :book_id AND status IN ('Available', 'Reserved') 
+                        ORDER BY copy_id ASC LIMIT 1
+                    ");
+                    $findCopy->execute([':book_id' => $bookId]);
+                    $cRow = $findCopy->fetch();
+                    if ($cRow) {
+                        $existingCopyId = (int)$cRow['copy_id'];
+                    }
+                }
+
+                if (!empty($existingCopyId)) {
+                    $db->prepare("UPDATE book_copies SET status = 'Borrowed' WHERE copy_id = :copy_id")
+                       ->execute([':copy_id' => $existingCopyId]);
+                }
+
+                $targetUid = (int)$res['user_id'];
+                $borrowDate = date('Y-m-d');
+                $dueDate = date('Y-m-d', strtotime('+14 days'));
+
+                $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+                if ($driver === 'pgsql') {
+                    $bStmt = $db->prepare("
+                        INSERT INTO borrowing_records (user_id, copy_id, issued_by, borrow_date, due_date, status)
+                        VALUES (:user, :copy, :issued, :borrow, :due, 'Borrowed')
+                        RETURNING borrow_id
+                    ");
+                } else {
+                    $bStmt = $db->prepare("
+                        INSERT INTO borrowing_records (user_id, copy_id, issued_by, borrow_date, due_date, status)
+                        VALUES (:user, :copy, :issued, :borrow, :due, 'Borrowed')
+                    ");
+                }
+                $bStmt->execute([
+                    ':user'   => $targetUid,
+                    ':copy'   => $existingCopyId,
+                    ':issued' => $currUser,
+                    ':borrow' => $borrowDate,
+                    ':due'    => $dueDate,
+                ]);
+
+                $stmt = $db->prepare("UPDATE reservations SET status = 'Fulfilled', copy_id = :copy_id WHERE reservation_id = :id");
+                $stmt->execute([':copy_id' => $existingCopyId, ':id' => $id]);
+
             } else {
-                // Other status updates (e.g. Fulfilled, or Pending -> Rejected)
+                // Other status updates
                 $stmt = $db->prepare("UPDATE reservations SET status = :status WHERE reservation_id = :id");
                 $stmt->execute([':status' => $newStatus, ':id' => $id]);
             }
@@ -266,8 +330,8 @@ switch ($method) {
         $resStmt->execute([':id' => $id]);
         $res = $resStmt->fetch();
 
-        // If deleting an Approved reservation that has a reserved copy, release copy back to Available
-        if ($res && $res['status'] === 'Approved' && !empty($res['copy_id'])) {
+        // If deleting a reservation that has a reserved copy, release copy back to Available
+        if ($res && !empty($res['copy_id']) && $res['status'] !== 'Fulfilled') {
             $db->prepare("UPDATE book_copies SET status = 'Available' WHERE copy_id = :copy_id AND status = 'Reserved'")
                ->execute([':copy_id' => $res['copy_id']]);
         }

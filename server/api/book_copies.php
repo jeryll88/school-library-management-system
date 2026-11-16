@@ -40,8 +40,9 @@ switch ($method) {
 
         $bookId = $_GET['book_id'] ?? '';
         $search = $_GET['search']  ?? '';
+        $status = $_GET['status']  ?? '';
         $page   = max(1, (int)($_GET['page'] ?? 1));
-        $limit  = 15;
+        $limit  = min(5000, max(1, (int)($_GET['limit'] ?? 15)));
         $offset = ($page - 1) * $limit;
 
         $where  = [];
@@ -50,6 +51,10 @@ switch ($method) {
         if ($bookId !== '') {
             $where[]  = "bc.book_id = :book_id";
             $params[':book_id'] = $bookId;
+        }
+        if ($status !== '') {
+            $where[]  = "bc.status = :status";
+            $params[':status'] = $status;
         }
         if ($search !== '') {
             $where[]  = "(b.title LIKE :search_title OR bc.barcode LIKE :search_barcode)";

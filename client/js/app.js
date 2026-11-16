@@ -1588,9 +1588,9 @@ async function renderBorrowing(page = 1, search = '', status = '') {
 }
 
 async function issueBook() {
-    const students = await api('api/students.php?page=1');
-    const copies = await api('api/book_copies.php?page=1&search=');
-    const avail  = (copies.data || []).filter(c => c.status === 'Available');
+    const students = await api('api/students.php?limit=5000');
+    const copies = await api('api/book_copies.php?limit=5000&status=Available');
+    const avail  = copies.data || [];
 
     const userOptions = (students.data || [])
         .filter(student => student.user_id && Number(student.is_active) === 1)
@@ -1855,8 +1855,8 @@ async function submitStudentReservation(e) {
 
 async function addReservation() {
     const [users, books] = await Promise.all([
-        api('api/students.php?page=1'),
-        api('api/books.php?page=1'),
+        api('api/students.php?limit=5000'),
+        api('api/books.php?limit=5000&available_only=1'),
     ]);
     const userOpts = (users.data || [])
         .filter(student => student.user_id && Number(student.is_active) === 1)
