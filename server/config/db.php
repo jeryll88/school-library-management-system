@@ -34,9 +34,11 @@ function getDB() {
                 if ($scheme === 'mysql') {
                     $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
                 } else {
-                    // PostgreSQL / Neon (include endpoint option for SNI)
+                    // PostgreSQL / Neon – strip '-pooler' from host for SNI match,
+                    // and pass explicit endpoint ID for libpq without SNI support
                     $endpointId = explode('.', $host)[0];
                     $endpointId = str_replace('-pooler', '', $endpointId);
+                    $host = str_replace('-pooler', '', $host);
                     $dsn = "pgsql:host={$host};port={$port};dbname={$name};sslmode=require;options='endpoint={$endpointId}'";
                 }
 
