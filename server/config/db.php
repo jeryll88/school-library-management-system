@@ -14,8 +14,12 @@ function getDB() {
     static $pdo = null;
     if ($pdo === null) {
         try {
-            // Check for Cloud Database URL (Neon / Render environment variable)
-            $dbUrl = getenv('DATABASE_URL') ?: (getenv('NEON_DATABASE_URL') ?: (getenv('DB_URL') ?: null));
+            // Check for Cloud Database URL (Neon / Render / Vercel environment variable)
+            $dbUrl = getenv('DATABASE_URL') 
+                  ?: ($_ENV['DATABASE_URL'] 
+                  ?? ($_SERVER['DATABASE_URL'] 
+                  ?? (getenv('NEON_DATABASE_URL') 
+                  ?: (getenv('DB_URL') ?: null))));
 
             if (!empty($dbUrl)) {
                 // Parse postgresql://user:password@host:port/dbname?sslmode=require

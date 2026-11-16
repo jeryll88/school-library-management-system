@@ -7,6 +7,10 @@ require_once __DIR__ . '/db.php';
 
 function startAppSession() {
     if (session_status() === PHP_SESSION_NONE) {
+        // In serverless environments (Vercel Lambda), explicitly use writable /tmp for session files
+        if (getenv('VERCEL') || !empty($_ENV['VERCEL']) || !empty($_SERVER['VERCEL'])) {
+            @session_save_path('/tmp');
+        }
         session_start();
     }
 }

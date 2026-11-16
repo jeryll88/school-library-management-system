@@ -1,0 +1,7 @@
+.git
+.github
+.gemini
+scratch/
+*.log
+*.tmp
+docs/
