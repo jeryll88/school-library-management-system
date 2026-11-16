@@ -22,10 +22,15 @@ switch ($method) {
         // 1. Single Book by ID
         if (isset($_GET['id']) && $_GET['id'] !== '') {
             $bookId = (int)$_GET['id'];
+            $currUserId = (int)($account['user_id'] ?? 0);
             $stmt = $db->prepare("
                 SELECT b.*, c.category_name, c.category_type,
                        COUNT(bc.copy_id) AS total_copies,
-                       COALESCE(SUM(CASE WHEN bc.status = 'Available' THEN 1 ELSE 0 END), 0) AS available_copies
+                       COALESCE(SUM(CASE WHEN bc.status = 'Available' THEN 1 ELSE 0 END), 0) AS available_copies,
+                       (SELECT r.status FROM reservations r WHERE r.book_id = b.book_id AND r.user_id = :curr_user AND r.status IN ('Pending', 'Approved') LIMIT 1) AS my_reservation_status,
+                       (SELECT r.reservation_id FROM reservations r WHERE r.book_id = b.book_id AND r.user_id = :curr_user AND r.status IN ('Pending', 'Approved') LIMIT 1) AS my_reservation_id,
+                       (SELECT bc2.barcode FROM reservations r JOIN book_copies bc2 ON r.copy_id = bc2.copy_id WHERE r.book_id = b.book_id AND r.user_id = :curr_user AND r.status IN ('Pending', 'Approved') LIMIT 1) AS my_reserved_barcode,
+                       (SELECT br.status FROM borrowing_records br JOIN book_copies bc3 ON br.copy_id = bc3.copy_id WHERE bc3.book_id = b.book_id AND br.user_id = :curr_user AND br.status IN ('Borrowed', 'Overdue') LIMIT 1) AS my_borrow_status
                 FROM books b
                 LEFT JOIN categories c ON b.category_id = c.category_id
                 LEFT JOIN book_copies bc ON bc.book_id = b.book_id
@@ -33,7 +38,7 @@ switch ($method) {
                 GROUP BY b.book_id, c.category_name, c.category_type
                 LIMIT 1
             ");
-            $stmt->execute([':id' => $bookId]);
+            $stmt->execute([':id' => $bookId, ':curr_user' => $currUserId]);
             $book = $stmt->fetch();
             if (!$book) {
                 jsonResponse(['error' => 'Book not found'], 404);
@@ -105,10 +110,15 @@ switch ($method) {
         $total = (int)$countStmt->fetchColumn();
 
         // Data
+        $currUserId = (int)($account['user_id'] ?? 0);
         $stmt = $db->prepare("
             SELECT b.*, c.category_name, c.category_type,
                    COUNT(bc.copy_id) AS total_copies,
-                   COALESCE(SUM(CASE WHEN bc.status = 'Available' THEN 1 ELSE 0 END), 0) AS available_copies
+                   COALESCE(SUM(CASE WHEN bc.status = 'Available' THEN 1 ELSE 0 END), 0) AS available_copies,
+                   (SELECT r.status FROM reservations r WHERE r.book_id = b.book_id AND r.user_id = :curr_user AND r.status IN ('Pending', 'Approved') LIMIT 1) AS my_reservation_status,
+                   (SELECT r.reservation_id FROM reservations r WHERE r.book_id = b.book_id AND r.user_id = :curr_user AND r.status IN ('Pending', 'Approved') LIMIT 1) AS my_reservation_id,
+                   (SELECT bc2.barcode FROM reservations r JOIN book_copies bc2 ON r.copy_id = bc2.copy_id WHERE r.book_id = b.book_id AND r.user_id = :curr_user AND r.status IN ('Pending', 'Approved') LIMIT 1) AS my_reserved_barcode,
+                   (SELECT br.status FROM borrowing_records br JOIN book_copies bc3 ON br.copy_id = bc3.copy_id WHERE bc3.book_id = b.book_id AND br.user_id = :curr_user AND br.status IN ('Borrowed', 'Overdue') LIMIT 1) AS my_borrow_status
             FROM books b
             LEFT JOIN categories c ON b.category_id = c.category_id
             LEFT JOIN book_copies bc ON bc.book_id = b.book_id
@@ -117,6 +127,7 @@ switch ($method) {
             ORDER BY b.created_at DESC
             LIMIT :limit OFFSET :offset
         ");
+        $stmt->bindValue(':curr_user', $currUserId, PDO::PARAM_INT);
         foreach ($params as $k => $v) {
             $stmt->bindValue($k, $v);
         }
@@ -152,20 +163,40 @@ switch ($method) {
             jsonResponse(['error' => "A book with ISBN '{$isbn}' already exists: {$existing['title']}"], 409);
         }
 
-        $stmt = $db->prepare("
-            INSERT INTO books (category_id, isbn, title, author, publisher, publication_year, description)
-            VALUES (:cat, :isbn, :title, :author, :pub, :year, :desc)
-        ");
-        $stmt->execute([
-            ':cat'    => $catId,
-            ':isbn'   => $isbn,
-            ':title'  => $title,
-            ':author' => $author,
-            ':pub'    => $pub,
-            ':year'   => $year,
-            ':desc'   => $desc,
-        ]);
-        jsonResponse(['success' => true, 'book_id' => (int)$db->lastInsertId()], 201);
+        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $stmt = $db->prepare("
+                INSERT INTO books (category_id, isbn, title, author, publisher, publication_year, description)
+                VALUES (:cat, :isbn, :title, :author, :pub, :year, :desc)
+                RETURNING book_id
+            ");
+            $stmt->execute([
+                ':cat'    => $catId,
+                ':isbn'   => $isbn,
+                ':title'  => $title,
+                ':author' => $author,
+                ':pub'    => $pub,
+                ':year'   => $year,
+                ':desc'   => $desc,
+            ]);
+            $newBookId = (int)$stmt->fetchColumn();
+        } else {
+            $stmt = $db->prepare("
+                INSERT INTO books (category_id, isbn, title, author, publisher, publication_year, description)
+                VALUES (:cat, :isbn, :title, :author, :pub, :year, :desc)
+            ");
+            $stmt->execute([
+                ':cat'    => $catId,
+                ':isbn'   => $isbn,
+                ':title'  => $title,
+                ':author' => $author,
+                ':pub'    => $pub,
+                ':year'   => $year,
+                ':desc'   => $desc,
+            ]);
+            $newBookId = (int)$db->lastInsertId();
+        }
+        jsonResponse(['success' => true, 'book_id' => $newBookId], 201);
         break;
 
     case 'PUT':

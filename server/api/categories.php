@@ -33,9 +33,17 @@ switch ($method) {
         $input = getInput();
         if (empty($input['category_name'])) jsonResponse(['error' => 'Category name is required'], 422);
         $type = in_array($input['category_type'] ?? '', ['Academic', 'Non-Academic'], true) ? $input['category_type'] : 'Academic';
-        $stmt = $db->prepare("INSERT INTO categories (category_name, category_type, description) VALUES (:name, :type, :desc)");
-        $stmt->execute([':name' => $input['category_name'], ':type' => $type, ':desc' => $input['description'] ?? null]);
-        jsonResponse(['success' => true, 'category_id' => $db->lastInsertId()], 201);
+        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $stmt = $db->prepare("INSERT INTO categories (category_name, category_type, description) VALUES (:name, :type, :desc) RETURNING category_id");
+            $stmt->execute([':name' => $input['category_name'], ':type' => $type, ':desc' => $input['description'] ?? null]);
+            $catId = (int)$stmt->fetchColumn();
+        } else {
+            $stmt = $db->prepare("INSERT INTO categories (category_name, category_type, description) VALUES (:name, :type, :desc)");
+            $stmt->execute([':name' => $input['category_name'], ':type' => $type, ':desc' => $input['description'] ?? null]);
+            $catId = (int)$db->lastInsertId();
+        }
+        jsonResponse(['success' => true, 'category_id' => $catId], 201);
         break;
 
     case 'PUT':

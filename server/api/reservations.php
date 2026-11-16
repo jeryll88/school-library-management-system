@@ -64,9 +64,9 @@ switch ($method) {
             $total = (int)$countStmt->fetchColumn();
 
             $stmt = $db->prepare("
-                SELECT r.reservation_id, r.reservation_date, r.status, r.copy_id,
+                SELECT r.reservation_id, r.reservation_date, r.status, r.copy_id, r.user_id,
                        bc.barcode AS reserved_barcode,
-                       s.name AS student_name, u.full_name,
+                       s.name AS student_name, s.student_number, u.full_name, u.username,
                        b.title AS book_title, b.book_id
                 FROM reservations r
                 JOIN users u ON r.user_id = u.user_id
@@ -300,6 +300,10 @@ switch ($method) {
                 $stmt->execute([':status' => $newStatus, ':id' => $id]);
 
             } elseif ($newStatus === 'Fulfilled') {
+                if ($oldStatus === 'Fulfilled') {
+                    jsonResponse(['error' => 'This reservation has already been fulfilled.'], 400);
+                }
+
                 // When marking as Fulfilled: transition copy to Borrowed and insert into borrowing_records
                 if (empty($existingCopyId)) {
                     $findCopy = $db->prepare("
@@ -314,14 +318,39 @@ switch ($method) {
                     }
                 }
 
-                if (!empty($existingCopyId)) {
-                    $db->prepare("UPDATE book_copies SET status = 'Borrowed' WHERE copy_id = :copy_id")
-                       ->execute([':copy_id' => $existingCopyId]);
+                if (empty($existingCopyId)) {
+                    jsonResponse(['error' => 'No copy found to fulfill this reservation.'], 404);
                 }
 
+                // Prevent duplicate: check if copy already actively borrowed
+                $dupCopyBorrow = $db->prepare("
+                    SELECT borrow_id FROM borrowing_records 
+                    WHERE copy_id = :cid AND status IN ('Borrowed', 'Overdue')
+                    LIMIT 1
+                ");
+                $dupCopyBorrow->execute([':cid' => $existingCopyId]);
+                if ($dupCopyBorrow->fetch()) {
+                    jsonResponse(['error' => 'This copy already has an active borrowing record. Cannot fulfill.'], 409);
+                }
+
+                // Prevent duplicate: check if student already has active borrow (quota = 1)
+                $dupUserBorrow = $db->prepare("
+                    SELECT borrow_id FROM borrowing_records 
+                    WHERE user_id = :uid AND status IN ('Borrowed', 'Overdue')
+                    LIMIT 1
+                ");
+                $dupUserBorrow->execute([':uid' => (int)$res['user_id']]);
+                if ($dupUserBorrow->fetch()) {
+                    jsonResponse(['error' => 'This student already has an active borrowed book. Cannot fulfill reservation until current book is returned.'], 409);
+                }
+
+                // Update copy status to Borrowed
+                $db->prepare("UPDATE book_copies SET status = 'Borrowed' WHERE copy_id = :copy_id")
+                   ->execute([':copy_id' => $existingCopyId]);
+
                 $targetUid = (int)$res['user_id'];
-                $borrowDate = date('Y-m-d');
-                $dueDate = date('Y-m-d', strtotime('+14 days'));
+                $borrowDate = !empty($input['borrow_date']) ? $input['borrow_date'] : date('Y-m-d');
+                $dueDate = !empty($input['due_date']) ? $input['due_date'] : date('Y-m-d', strtotime('+14 days'));
 
                 $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
                 if ($driver === 'pgsql') {

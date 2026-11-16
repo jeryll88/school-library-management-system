@@ -71,7 +71,7 @@ switch ($method) {
 
         $stmt = $db->prepare("
             SELECT br.borrow_id, br.borrow_date, br.due_date, br.return_date, br.status,
-                   s.name AS student_name, u.full_name,
+                   s.name AS student_name, s.student_number, u.full_name, u.username,
                    b.title AS book_title, bc.barcode, bc.copy_id
             FROM borrowing_records br
             JOIN users u ON br.user_id = u.user_id
@@ -87,8 +87,25 @@ switch ($method) {
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
         $records = $stmt->fetchAll();
+        $today = date('Y-m-d');
+        $fineRate = 10.00; // ₱10.00 per day overdue
         foreach ($records as &$r) {
             $r['copy_label'] = 'C' . str_pad($r['copy_id'] ?? 0, 3, '0', STR_PAD_LEFT) . ' - ' . ($r['book_title'] ?? '');
+            
+            $dueDate = $r['due_date'] ?? null;
+            $returnDate = $r['return_date'] ?? null;
+            $overdueDays = 0;
+            
+            if ($r['status'] === 'Overdue' || ($r['status'] === 'Borrowed' && $dueDate && $dueDate < $today)) {
+                $overdueDays = max(0, (int)floor((strtotime($today) - strtotime($dueDate)) / 86400));
+            } elseif ($r['status'] === 'Returned' && $returnDate && $dueDate && $returnDate > $dueDate) {
+                $overdueDays = max(0, (int)floor((strtotime($returnDate) - strtotime($dueDate)) / 86400));
+            }
+            
+            $r['overdue_days'] = $overdueDays;
+            $r['fine_rate'] = $fineRate;
+            $r['fine_amount'] = $overdueDays * $fineRate;
+            $r['formatted_fine'] = '₱' . number_format($r['fine_amount'], 2);
         }
         unset($r);
         jsonResponse(['data' => $records, 'total' => $total, 'page' => $page, 'limit' => $limit]);
@@ -181,6 +198,17 @@ switch ($method) {
             }
         } elseif ($copy['status'] !== 'Available') {
             jsonResponse(['error' => "Book copy is not available (Current status: {$copy['status']})"], 409);
+        }
+
+        // Prevent duplicate active borrowing record for same copy
+        $dupCopyCheck = $db->prepare("
+            SELECT borrow_id FROM borrowing_records 
+            WHERE copy_id = :cid AND status IN ('Borrowed', 'Overdue')
+            LIMIT 1
+        ");
+        $dupCopyCheck->execute([':cid' => $input['copy_id']]);
+        if ($dupCopyCheck->fetch()) {
+            jsonResponse(['error' => 'This copy already has an active borrowing record.'], 409);
         }
 
         // Create borrowing record

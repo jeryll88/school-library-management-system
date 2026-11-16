@@ -68,9 +68,15 @@ switch ($method) {
         $total = (int)$countStmt->fetchColumn();
 
         $stmt = $db->prepare("
-            SELECT bc.*, b.title AS book_title, b.author
+            SELECT bc.*, b.title AS book_title, b.author,
+                   r.reservation_id, r.status AS reservation_status,
+                   u.full_name AS reserved_by_name, s.name AS reserved_student_name,
+                   s.student_number AS reserved_by_student_id, u.username AS reserved_by_username
             FROM book_copies bc
             JOIN books b ON bc.book_id = b.book_id
+            LEFT JOIN reservations r ON bc.copy_id = r.copy_id AND r.status IN ('Pending', 'Approved')
+            LEFT JOIN users u ON r.user_id = u.user_id
+            LEFT JOIN students s ON u.student_id = s.id
             $whereSQL
             ORDER BY bc.copy_id ASC
             LIMIT :limit OFFSET :offset
@@ -87,13 +93,32 @@ switch ($method) {
         if (empty($input['book_id']) || empty($input['barcode'])) {
             jsonResponse(['error' => 'book_id and barcode are required'], 422);
         }
-        $stmt = $db->prepare("INSERT INTO book_copies (book_id, barcode, status) VALUES (:book_id, :barcode, :status)");
-        $stmt->execute([
-            ':book_id' => $input['book_id'],
-            ':barcode' => $input['barcode'],
-            ':status'  => $input['status'] ?? 'Available',
-        ]);
-        jsonResponse(['success' => true, 'copy_id' => $db->lastInsertId()], 201);
+
+        $dup = $db->prepare("SELECT copy_id FROM book_copies WHERE LOWER(barcode) = LOWER(:b) LIMIT 1");
+        $dup->execute([':b' => $input['barcode']]);
+        if ($dup->fetch()) {
+            jsonResponse(['error' => "Barcode '{$input['barcode']}' is already assigned to another copy"], 409);
+        }
+
+        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $stmt = $db->prepare("INSERT INTO book_copies (book_id, barcode, status) VALUES (:book_id, :barcode, :status) RETURNING copy_id");
+            $stmt->execute([
+                ':book_id' => $input['book_id'],
+                ':barcode' => $input['barcode'],
+                ':status'  => $input['status'] ?? 'Available',
+            ]);
+            $copyId = (int)$stmt->fetchColumn();
+        } else {
+            $stmt = $db->prepare("INSERT INTO book_copies (book_id, barcode, status) VALUES (:book_id, :barcode, :status)");
+            $stmt->execute([
+                ':book_id' => $input['book_id'],
+                ':barcode' => $input['barcode'],
+                ':status'  => $input['status'] ?? 'Available',
+            ]);
+            $copyId = (int)$db->lastInsertId();
+        }
+        jsonResponse(['success' => true, 'copy_id' => $copyId], 201);
         break;
 
     case 'PUT':

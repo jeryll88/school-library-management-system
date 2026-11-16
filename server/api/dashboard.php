@@ -67,6 +67,8 @@ try {
             ");
             $stmt->execute([':uid' => $userId]);
             $myBorrowings = $stmt->fetchAll();
+            $totalFine = 0;
+            $fineRate = 10.00; // ₱10.00 per day overdue
             foreach ($myBorrowings as &$mb) {
                 if (!empty($mb['due_date'])) {
                     $diff = (int)$today->diff(new DateTime($mb['due_date']))->format('%r%a');
@@ -74,8 +76,22 @@ try {
                     if ($mb['status'] === 'Borrowed' && $diff >= 0 && $diff <= 2) {
                         $dueSoonCount++;
                     }
+                    if ($diff < 0 && ($mb['status'] === 'Borrowed' || $mb['status'] === 'Overdue')) {
+                        $overdueDays = abs($diff);
+                        $mb['overdue_days'] = $overdueDays;
+                        $mb['fine_amount'] = $overdueDays * $fineRate;
+                        $mb['formatted_fine'] = '₱' . number_format($mb['fine_amount'], 2);
+                        $totalFine += $mb['fine_amount'];
+                    } else {
+                        $mb['overdue_days'] = 0;
+                        $mb['fine_amount'] = 0;
+                        $mb['formatted_fine'] = '₱0.00';
+                    }
                 } else {
                     $mb['days_left'] = 0;
+                    $mb['overdue_days'] = 0;
+                    $mb['fine_amount'] = 0;
+                    $mb['formatted_fine'] = '₱0.00';
                 }
             }
             unset($mb);
@@ -85,8 +101,11 @@ try {
                 $stmt = $db->prepare("
                     SELECT r.reservation_id, r.reservation_date, r.status, r.copy_id,
                            bc.barcode AS reserved_barcode,
-                           b.book_id, b.title AS book_title, b.author, c.category_name
+                           b.book_id, b.title AS book_title, b.author, c.category_name,
+                           s.name AS student_name, s.student_number, u.full_name
                     FROM reservations r
+                    JOIN users u ON r.user_id = u.user_id
+                    LEFT JOIN students s ON u.student_id = s.id
                     JOIN books b ON r.book_id = b.book_id
                     LEFT JOIN categories c ON b.category_id = c.category_id
                     LEFT JOIN book_copies bc ON r.copy_id = bc.copy_id
@@ -100,8 +119,10 @@ try {
                 $stmt = $db->prepare("
                     SELECT r.reservation_id, r.reservation_date, r.status, NULL AS copy_id,
                            NULL AS reserved_barcode,
-                           b.book_id, b.title AS book_title, b.author, c.category_name
+                           b.book_id, b.title AS book_title, b.author, c.category_name,
+                           u.full_name AS student_name, NULL AS student_number, u.full_name
                     FROM reservations r
+                    JOIN users u ON r.user_id = u.user_id
                     JOIN books b ON r.book_id = b.book_id
                     LEFT JOIN categories c ON b.category_id = c.category_id
                     WHERE r.user_id = :uid
@@ -114,27 +135,33 @@ try {
         }
 
         // Fast featured books: limits to latest 6 books first before joining copies
-        $featuredBooks = $db->query("
+        $featStmt = $db->prepare("
             SELECT b.book_id, b.title, b.author, b.isbn, c.category_name,
                    COUNT(bc.copy_id) AS total_copies,
-                   COUNT(CASE WHEN bc.status = 'Available' THEN 1 END) AS available_copies
+                   COUNT(CASE WHEN bc.status = 'Available' THEN 1 END) AS available_copies,
+                   (SELECT r.status FROM reservations r WHERE r.book_id = b.book_id AND r.user_id = :uid AND r.status IN ('Pending', 'Approved') LIMIT 1) AS my_reservation_status
             FROM (SELECT book_id, category_id, isbn, title, author FROM books ORDER BY book_id DESC LIMIT 6) b
             LEFT JOIN categories c ON b.category_id = c.category_id
             LEFT JOIN book_copies bc ON bc.book_id = b.book_id
             GROUP BY b.book_id, b.title, b.author, b.isbn, c.category_name
             ORDER BY b.book_id DESC
-        ")->fetchAll();
+        ");
+        $featStmt->execute([':uid' => $userId]);
+        $featuredBooks = $featStmt->fetchAll();
 
         jsonResponse([
             'role' => 'Student',
             'stats' => [
-                'my_borrowed'     => $borrowedCount,
-                'my_overdue'      => $overdueCount,
-                'my_due_soon'     => $dueSoonCount,
-                'my_reservations' => $reserveCount,
-                'my_returned'     => $returnedCount,
-                'borrow_quota'    => 1,
-                'total_catalog'   => count($featuredBooks),
+                'my_borrowed'          => $borrowedCount,
+                'my_overdue'           => $overdueCount,
+                'my_due_soon'          => $dueSoonCount,
+                'my_reservations'      => $reserveCount,
+                'my_returned'          => $returnedCount,
+                'borrow_quota'         => 1,
+                'total_fine'           => $totalFine,
+                'formatted_total_fine' => '₱' . number_format($totalFine, 2),
+                'fine_rate'            => 10.00,
+                'total_catalog'        => count($featuredBooks),
             ],
             'my_borrowings'   => $myBorrowings,
             'my_reservations' => $myReservations,

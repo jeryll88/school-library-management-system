@@ -106,18 +106,35 @@ switch ($method) {
 
         try {
             $db->beginTransaction();
-            $stmt = $db->prepare("
-                INSERT INTO students (name, student_number, gender, year_level, course_id)
-                VALUES (:name, :snum, :gender, :year, :course)
-            ");
-            $stmt->execute([
-                ':name'   => $name,
-                ':snum'   => $studentNumber,
-                ':gender' => $gender,
-                ':year'   => $yearLevel,
-                ':course' => $courseId,
-            ]);
-            $studentId = (int)$db->lastInsertId();
+            $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'pgsql') {
+                $stmt = $db->prepare("
+                    INSERT INTO students (name, student_number, gender, year_level, course_id)
+                    VALUES (:name, :snum, :gender, :year, :course)
+                    RETURNING id
+                ");
+                $stmt->execute([
+                    ':name'   => $name,
+                    ':snum'   => $studentNumber,
+                    ':gender' => $gender,
+                    ':year'   => $yearLevel,
+                    ':course' => $courseId,
+                ]);
+                $studentId = (int)$stmt->fetchColumn();
+            } else {
+                $stmt = $db->prepare("
+                    INSERT INTO students (name, student_number, gender, year_level, course_id)
+                    VALUES (:name, :snum, :gender, :year, :course)
+                ");
+                $stmt->execute([
+                    ':name'   => $name,
+                    ':snum'   => $studentNumber,
+                    ':gender' => $gender,
+                    ':year'   => $yearLevel,
+                    ':course' => $courseId,
+                ]);
+                $studentId = (int)$db->lastInsertId();
+            }
 
             if ($createAccount) {
                 $uStmt = $db->prepare("

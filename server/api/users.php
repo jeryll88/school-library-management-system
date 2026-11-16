@@ -199,18 +199,35 @@ switch ($method) {
 
         $db->beginTransaction();
         try {
-            $stmt = $db->prepare("
-                INSERT INTO users (username, full_name, employee_id, email, password_hash, role, is_active)
-                VALUES (:username, :full_name, :employee_id, :email, :password_hash, 'Librarian', 1)
-            ");
-            $stmt->execute([
-                ':username' => $username,
-                ':full_name' => $fullName,
-                ':employee_id' => $employeeId,
-                ':email' => $email,
-                ':password_hash' => password_hash($password, PASSWORD_DEFAULT),
-            ]);
-            $userId = (int)$db->lastInsertId();
+            $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'pgsql') {
+                $stmt = $db->prepare("
+                    INSERT INTO users (username, full_name, employee_id, email, password_hash, role, is_active)
+                    VALUES (:username, :full_name, :employee_id, :email, :password_hash, 'Librarian', 1)
+                    RETURNING user_id
+                ");
+                $stmt->execute([
+                    ':username' => $username,
+                    ':full_name' => $fullName,
+                    ':employee_id' => $employeeId,
+                    ':email' => $email,
+                    ':password_hash' => password_hash($password, PASSWORD_DEFAULT),
+                ]);
+                $userId = (int)$stmt->fetchColumn();
+            } else {
+                $stmt = $db->prepare("
+                    INSERT INTO users (username, full_name, employee_id, email, password_hash, role, is_active)
+                    VALUES (:username, :full_name, :employee_id, :email, :password_hash, 'Librarian', 1)
+                ");
+                $stmt->execute([
+                    ':username' => $username,
+                    ':full_name' => $fullName,
+                    ':employee_id' => $employeeId,
+                    ':email' => $email,
+                    ':password_hash' => password_hash($password, PASSWORD_DEFAULT),
+                ]);
+                $userId = (int)$db->lastInsertId();
+            }
             logLibrarianActivity($db, $account, $userId, $username, 'librarian.created', [
                 'full_name' => $fullName,
                 'employee_id' => $employeeId,

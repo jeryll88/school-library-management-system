@@ -290,8 +290,14 @@ function renderStudentDashboard(data) {
 
     const borrowingRows = myBorrowings.map((b, i) => {
         const isOverdue = b.days_left < 0 && (b.status === 'Borrowed' || b.status === 'Overdue');
+        const overdueDays = Math.abs(b.days_left);
+        const fineText = b.formatted_fine || ('₱' + (overdueDays * 10).toFixed(2));
         const dueText = isOverdue 
-            ? `<span class="text-rose-600 font-bold">${fmt(b.due_date)} (${Math.abs(b.days_left)}d overdue)</span>`
+            ? `<div><span class="text-rose-600 font-bold">${fmt(b.due_date)}</span></div>
+               <div class="text-[11px] text-rose-600 font-semibold mt-0.5 flex items-center gap-1">
+                   <span class="bg-rose-100 text-rose-800 text-[9px] px-1.5 py-0.2 rounded font-black">${overdueDays}d overdue</span>
+                   <span>Penalty to Pay: <strong class="text-rose-700">${fineText}</strong></span>
+               </div>`
             : `${fmt(b.due_date)} <span class="text-slate-400 text-xs">(${b.days_left}d left)</span>`;
         return `
         <tr>
@@ -308,8 +314,14 @@ function renderStudentDashboard(data) {
         <tr>
             <td class="font-bold text-slate-500">${i + 1}</td>
             <td class="font-semibold text-slate-800">
-                ${escapeHtml(r.book_title)}
-                ${r.reserved_barcode ? `<div class="text-[10px] text-slate-400 font-normal"><i class="fa-solid fa-barcode mr-0.5"></i>Copy: <span class="font-mono text-blue-600 font-semibold">${escapeHtml(r.reserved_barcode)}</span></div>` : ''}
+                <div class="font-bold text-slate-900">${escapeHtml(r.book_title)}</div>
+                <div class="text-[11px] text-purple-700 font-medium mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <span class="inline-flex items-center gap-1 bg-purple-50 text-purple-800 px-1.5 py-0.5 rounded border border-purple-200">
+                        <i class="fa-solid fa-id-card text-purple-600"></i>
+                        <span>Reserved for: <strong>${escapeHtml(r.student_name || r.full_name || window.CURRENT_USER?.full_name || 'You')}</strong> (ID: <span class="font-mono font-bold">${escapeHtml(r.student_number || window.CURRENT_USER?.student_number || window.CURRENT_USER?.username || '—')}</span>)</span>
+                    </span>
+                </div>
+                ${r.reserved_barcode ? `<div class="text-[10px] text-slate-500 font-normal mt-0.5"><i class="fa-solid fa-barcode mr-0.5 text-slate-400"></i>Held Copy: <span class="font-mono text-blue-600 font-semibold">${escapeHtml(r.reserved_barcode)}</span></div>` : ''}
             </td>
             <td class="text-slate-500">${fmt(r.reservation_date)}</td>
             <td>${badge(r.status)}</td>
@@ -353,10 +365,16 @@ function renderStudentDashboard(data) {
                 <button onclick="viewBook(${b.book_id})" class="text-xs text-slate-500 hover:text-slate-800 font-semibold">
                     <i class="fa-regular fa-eye mr-1"></i> Details
                 </button>
-                <button onclick="studentReserveBook(${b.book_id}, '${escapeHtml(b.title).replace(/'/g, "\\'")}')" 
-                    class="text-xs bg-brand-500 hover:bg-brand-600 text-white font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 shadow-xs">
-                    <i class="fa-regular fa-bookmark"></i> Reserve
-                </button>
+                ${b.my_reservation_status ? `
+                    <span class="text-xs bg-purple-100 text-purple-800 font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 border border-purple-200" title="Reserved under your Student ID (${escapeHtml(window.CURRENT_USER?.student_number || window.CURRENT_USER?.username || '')})">
+                        <i class="fa-solid fa-bookmark text-purple-600"></i> Reserved by You
+                    </span>
+                ` : `
+                    <button onclick="studentReserveBook(${b.book_id}, '${escapeHtml(b.title).replace(/'/g, "\\'")}')" 
+                        class="text-xs bg-brand-500 hover:bg-brand-600 text-white font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 shadow-xs">
+                        <i class="fa-regular fa-bookmark"></i> Reserve
+                    </button>
+                `}
             </div>
         </div>`;
     }).join('') || '<div class="col-span-3 text-center py-6 text-slate-400">No books currently in catalog.</div>';
@@ -421,16 +439,23 @@ function renderStudentDashboard(data) {
 
     <!-- Overdue Warning Alert -->
     ${s.my_overdue > 0 ? `
-    <div class="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 shadow-2xs">
+    <div class="bg-rose-50 border-2 border-rose-300 rounded-xl p-4 mb-6 flex items-center justify-between gap-3 shadow-xs">
         <div class="flex items-center gap-3">
-            <i class="fa-solid fa-circle-exclamation text-rose-600 text-xl"></i>
+            <div class="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 text-lg shadow-xs">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
             <div>
-                <div class="font-bold text-rose-800 text-sm">Action Required: Overdue Books</div>
-                <div class="text-xs text-rose-600">You have ${s.my_overdue} book(s) past their return due date. Please return them to the library counter as soon as possible.</div>
+                <div class="font-black text-rose-900 text-sm flex items-center gap-2">
+                    <span>Action Required: Overdue Book Penalty</span>
+                    <span class="bg-rose-200 text-rose-900 text-xs px-2 py-0.5 rounded font-black">Fee to Pay: ${s.formatted_total_fine || '₱0.00'}</span>
+                </div>
+                <div class="text-xs text-rose-700 mt-0.5">
+                    You have ${s.my_overdue} book(s) past the return due date. A late penalty of <strong>₱10.00 per day overdue</strong> must be paid at the library counter upon return to clear your account.
+                </div>
             </div>
         </div>
-        <button onclick="navigateTo('borrowing')" class="text-xs bg-rose-600 text-white font-bold px-3 py-1.5 rounded-lg hover:bg-rose-700 transition-colors shrink-0">
-            View Details
+        <button onclick="navigateTo('borrowing')" class="text-xs bg-rose-600 text-white font-bold px-3.5 py-2 rounded-lg hover:bg-rose-700 transition-colors shrink-0 shadow-xs">
+            View Penalty Details
         </button>
     </div>` : ''}
 
@@ -863,13 +888,16 @@ function renderAdminDashboard(data) {
 // ─── STUDENT ACTIONS ──────────────────────────────────────────────────────────
 
 async function studentReserveBook(bookId, bookTitle) {
-    if (!confirm(`Do you want to reserve "${bookTitle}"?`)) return;
+    const studentInfo = window.CURRENT_USER?.student_number 
+        ? `under your Student ID (${window.CURRENT_USER.student_number})` 
+        : `under your account (${window.CURRENT_USER?.full_name || 'Student'})`;
+    if (!confirm(`Do you want to reserve "${bookTitle}" ${studentInfo}?`)) return;
     try {
         await api('api/reservations.php', 'POST', {
             book_id: bookId,
             user_id: window.CURRENT_USER?.id
         });
-        toast(`Reservation for "${bookTitle}" submitted successfully! 🎉`, 'success');
+        toast(`Reservation for "${bookTitle}" confirmed ${studentInfo}! 🎉`, 'success');
         if (State.currentPage === 'dashboard') {
             renderDashboard();
         } else if (State.currentPage === 'reservations') {
@@ -895,6 +923,9 @@ async function cancelMyReservation(reservationId) {
 }
 
 async function updateReservationStatus(reservationId, newStatus) {
+    if (newStatus === 'Fulfilled') {
+        return updateReservation(reservationId, 'Fulfilled');
+    }
     try {
         await api(`api/reservations.php?id=${reservationId}`, 'PUT', { status: newStatus });
         if (newStatus === 'Approved') {
@@ -947,13 +978,29 @@ async function renderBooks(page = 1, search = '', categoryId = '', availOnly = f
     const catOptions = buildGroupedCategoryOptions(cats.data || [], categoryId);
 
     const rows = (data.data || []).map(b => {
-        const studentAction = `
-            <button onclick="viewBook(${b.book_id})" title="View Details" class="text-slate-400 hover:text-blue-600 transition-colors mr-2"><i class="fa-regular fa-eye"></i></button>
-            ${b.available_copies > 0 
-                ? `<button onclick="studentReserveBook(${b.book_id},'${b.title.replace(/'/g,"\\'")}')" class="text-[11px] bg-brand-500 hover:bg-brand-600 text-white font-bold px-2.5 py-1 rounded-md shadow-2xs transition-colors"><i class="fa-regular fa-bookmark mr-1"></i> Reserve</button>`
-                : `<span class="text-[11px] text-slate-400 font-medium">All Borrowed</span>`
-            }
+        let studentAction = `
+            <button onclick="viewBook(${b.book_id})" title="View Details" class="text-slate-400 hover:text-blue-600 transition-colors mr-1.5"><i class="fa-regular fa-eye"></i></button>
         `;
+        if (b.my_reservation_status) {
+            studentAction += `
+                <span class="inline-flex items-center gap-1 text-[10px] bg-purple-50 text-purple-700 font-bold px-2 py-1 rounded-md border border-purple-200 shadow-2xs" title="Reserved under your name & Student ID">
+                    <i class="fa-solid fa-bookmark text-purple-600"></i> Reserved (${b.my_reservation_status})
+                </span>
+            `;
+        } else if (b.my_borrow_status) {
+            studentAction += `
+                <span class="inline-flex items-center gap-1 text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-1 rounded-md border border-blue-200 shadow-2xs">
+                    <i class="fa-solid fa-book-open text-blue-600"></i> Borrowed
+                </span>
+            `;
+        } else if (b.available_copies > 0) {
+            studentAction += `
+                <button onclick="studentReserveBook(${b.book_id},'${b.title.replace(/'/g,"\\'")}')" class="text-[11px] bg-brand-500 hover:bg-brand-600 text-white font-bold px-2.5 py-1 rounded-md shadow-2xs transition-colors"><i class="fa-regular fa-bookmark mr-1"></i> Reserve</button>
+            `;
+        } else {
+            studentAction += `<span class="text-[11px] text-slate-400 font-medium">All Borrowed</span>`;
+        }
+
         const adminAction = `
             <button onclick="viewBook(${b.book_id})" title="View" class="text-slate-400 hover:text-blue-600 transition-colors"><i class="fa-regular fa-eye"></i></button>
             <button onclick="editBook(${b.book_id})" title="Edit" class="text-slate-400 hover:text-amber-500 transition-colors"><i class="fa-regular fa-pen-to-square"></i></button>
@@ -974,7 +1021,15 @@ async function renderBooks(page = 1, search = '', categoryId = '', availOnly = f
                              onerror="this.remove()" />
                         <i class="fa-solid fa-book absolute z-0 text-slate-400"></i>
                     </div>
-                    <div class="max-w-[200px] truncate" title="${escapeHtml(b.title)}">${escapeHtml(b.title)}</div>
+                    <div>
+                        <div class="max-w-[200px] truncate" title="${escapeHtml(b.title)}">${escapeHtml(b.title)}</div>
+                        ${b.my_reservation_status ? `
+                            <div class="text-[10px] text-purple-700 font-medium flex items-center gap-1 mt-0.5">
+                                <i class="fa-solid fa-id-badge text-purple-500"></i>
+                                <span>Reserved under your ID: <strong class="font-mono">${escapeHtml(window.CURRENT_USER?.student_number || window.CURRENT_USER?.username || '')}</strong></span>
+                            </div>
+                        ` : ''}
+                    </div>
                 </div>
             </td>
             <td class="text-slate-600">${escapeHtml(b.author)}</td>
@@ -1027,7 +1082,9 @@ async function renderBooks(page = 1, search = '', categoryId = '', availOnly = f
             <div class="relative flex-1 max-w-xs">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                 <input id="book-search" type="text" placeholder="Search title, author, or ISBN..." value="${search}"
-                    class="form-input pl-8" oninput="debounce(() => renderBooks(1, this.value, document.getElementById('book-cat').value, document.getElementById('book-avail')?.checked), 400)()">
+                    class="form-input pl-8" 
+                    oninput="handleSearchInput('book-search', () => renderBooks(1, document.getElementById('book-search').value, document.getElementById('book-cat').value, document.getElementById('book-avail')?.checked))"
+                    onkeydown="handleSearchInput('book-search', () => renderBooks(1, document.getElementById('book-search').value, document.getElementById('book-cat').value, document.getElementById('book-avail')?.checked), event)">
             </div>
             ${!isStudent ? `
             <button onclick="exportBooksCsv()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-semibold text-xs px-3 py-1.5 rounded-lg flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer shrink-0">
@@ -1219,7 +1276,16 @@ async function viewBook(bookId) {
             const copyRows = copies.map(c => `
                 <tr>
                     <td class="font-mono text-xs">${escapeHtml(c.barcode)}</td>
-                    <td>${badge(c.status)}</td>
+                    <td>
+                    ${badge(c.status)}
+                    ${c.status === 'Reserved' ? `
+                        <div class="text-[10px] text-purple-700 font-semibold mt-1">
+                            <i class="fa-solid fa-id-card text-purple-500 mr-0.5"></i>
+                            For: ${escapeHtml(c.reserved_student_name || c.reserved_by_name || 'Student')}
+                            ${c.reserved_by_student_id ? `<div class="font-mono text-slate-500 text-[9px]">ID: ${escapeHtml(c.reserved_by_student_id)}</div>` : ''}
+                        </div>
+                    ` : ''}
+                </td>
                     <td class="text-center">
                         <button onclick="deleteCopy(${c.copy_id})" class="text-slate-400 hover:text-rose-500">
                             <i class="fa-regular fa-trash-can text-xs"></i>
@@ -1241,20 +1307,54 @@ async function viewBook(bookId) {
                 </table>
             </div>`;
         } else {
-            // Student View: show copy summary
-            copiesSection = `
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between">
-                <div>
-                    <div class="text-xs text-slate-500 font-medium">Availability Status</div>
-                    <div class="font-bold text-slate-800 text-sm">
-                        ${book.available_copies > 0 ? `${book.available_copies} of ${book.total_copies} copies available` : 'All copies are currently borrowed'}
+            // Student View: show copy summary or reservation details
+            if (book.my_reservation_status) {
+                copiesSection = `
+                <div class="bg-purple-50 border-2 border-purple-200 rounded-xl p-4 flex items-center justify-between gap-3 shadow-2xs">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0 text-lg shadow-xs">
+                            <i class="fa-solid fa-bookmark"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-purple-900 text-sm">Reserved Under Your Account</div>
+                            <div class="text-xs text-purple-700 mt-0.5">
+                                Reserved for: <strong>${escapeHtml(window.CURRENT_USER?.full_name || 'You')}</strong> 
+                                • Student ID: <strong class="font-mono text-blue-700">${escapeHtml(window.CURRENT_USER?.student_number || window.CURRENT_USER?.username || '—')}</strong>
+                                • Status: <span class="badge badge-${book.my_reservation_status === 'Approved' ? 'approved' : 'pending'}">${book.my_reservation_status}</span>
+                            </div>
+                            ${book.my_reserved_barcode ? `<div class="text-[11px] text-blue-700 font-semibold mt-1"><i class="fa-solid fa-barcode mr-1"></i>Copy held for pickup: <span class="font-mono">${book.my_reserved_barcode}</span></div>` : ''}
+                        </div>
                     </div>
-                </div>
-                ${book.available_copies > 0 ? `
-                <button onclick="closeModal(); studentReserveBook(${bookId}, '${escapeHtml(book.title).replace(/'/g, "\\'")}')" class="text-xs bg-brand-500 hover:bg-brand-600 text-white font-bold px-3 py-1.5 rounded-lg shadow-2xs transition-colors">
-                    <i class="fa-regular fa-bookmark mr-1"></i> Reserve Now
-                </button>` : ''}
-            </div>`;
+                    <button onclick="closeModal(); cancelMyReservation(${book.my_reservation_id})" class="text-xs text-rose-600 hover:text-rose-800 font-bold px-3 py-1.5 rounded-lg border border-rose-200 hover:bg-rose-50 transition-colors shrink-0">
+                        Cancel Hold
+                    </button>
+                </div>`;
+            } else if (book.my_borrow_status) {
+                copiesSection = `
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 text-lg">
+                        <i class="fa-solid fa-book-open"></i>
+                    </div>
+                    <div>
+                        <div class="font-bold text-blue-900 text-sm">You Currently Have This Book Borrowed</div>
+                        <div class="text-xs text-blue-700 mt-0.5">Status: ${badge(book.my_borrow_status)} • Check your borrowing history for return due date.</div>
+                    </div>
+                </div>`;
+            } else {
+                copiesSection = `
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between">
+                    <div>
+                        <div class="text-xs text-slate-500 font-medium">Availability Status</div>
+                        <div class="font-bold text-slate-800 text-sm">
+                            ${book.available_copies > 0 ? `${book.available_copies} of ${book.total_copies} copies available` : 'All copies are currently borrowed or reserved'}
+                        </div>
+                    </div>
+                    ${book.available_copies > 0 ? `
+                    <button onclick="closeModal(); studentReserveBook(${bookId}, '${escapeHtml(book.title).replace(/'/g, "\\'")}')" class="text-xs bg-brand-500 hover:bg-brand-600 text-white font-bold px-3.5 py-2 rounded-lg shadow-2xs transition-colors">
+                        <i class="fa-regular fa-bookmark mr-1"></i> Reserve Under My ID
+                    </button>` : ''}
+                </div>`;
+            }
         }
 
         showModal(`
@@ -1338,7 +1438,16 @@ async function renderBookCopies(page = 1, search = '') {
                 <td class="font-semibold text-slate-800">${c.book_title}</td>
                 <td class="text-slate-500">${c.author}</td>
                 <td class="font-mono text-xs text-slate-500">${c.barcode}</td>
-                <td>${badge(c.status)}</td>
+                <td>
+                    ${badge(c.status)}
+                    ${c.status === 'Reserved' ? `
+                        <div class="text-[10px] text-purple-700 font-semibold mt-1">
+                            <i class="fa-solid fa-id-card text-purple-500 mr-0.5"></i>
+                            For: ${escapeHtml(c.reserved_student_name || c.reserved_by_name || 'Student')}
+                            ${c.reserved_by_student_id ? `<div class="font-mono text-slate-500 text-[9px]">ID: ${escapeHtml(c.reserved_by_student_id)}</div>` : ''}
+                        </div>
+                    ` : ''}
+                </td>
                 <td class="text-center space-x-2">
                     <button onclick="editCopyStatus(${c.copy_id}, '${c.status}')" title="Change Status" class="text-slate-400 hover:text-amber-500 transition-colors"><i class="fa-regular fa-pen-to-square"></i></button>
                     <button onclick="deleteCopyRow(${c.copy_id})" title="Delete" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-regular fa-trash-can"></i></button>
@@ -1361,7 +1470,9 @@ async function renderBookCopies(page = 1, search = '') {
                 <div class="relative flex-1 max-w-xs">
                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                     <input id="copy-search" type="text" placeholder="Search by title or barcode..." value="${search}"
-                        class="form-input pl-8" oninput="debounce(() => renderBookCopies(1, this.value), 400)()">
+                        class="form-input pl-8" 
+                        oninput="handleSearchInput('copy-search', () => renderBookCopies(1, document.getElementById('copy-search').value))"
+                        onkeydown="handleSearchInput('copy-search', () => renderBookCopies(1, document.getElementById('copy-search').value), event)">
                 </div>
             </div>
             <div class="overflow-x-auto table-wrap">
@@ -1518,19 +1629,32 @@ async function renderBorrowing(page = 1, search = '', status = '') {
             </div>
         </td></tr>` : emptyRow(8, 'No borrowing records found');
 
-    const rows = (data.data || []).map(r => `
+    const rows = (data.data || []).map(r => {
+        const isOverdue = (r.status === 'Overdue') || (r.status === 'Borrowed' && (r.overdue_days || 0) > 0);
+        const dueDisplay = isOverdue
+            ? `<div><span class="text-rose-600 font-bold text-xs">${fmt(r.due_date)}</span></div>
+               <div class="text-[11px] text-rose-600 font-semibold mt-0.5 flex items-center gap-1">
+                   <span class="bg-rose-100 text-rose-800 text-[9px] px-1.5 py-0.2 rounded font-black">${r.overdue_days}d overdue</span>
+                   <span>Fine: <strong class="text-rose-700">${r.formatted_fine || '₱' + (r.overdue_days * 10).toFixed(2)}</strong></span>
+               </div>`
+            : `<span class="text-slate-600">${fmt(r.due_date)}</span>`;
+
+        return `
         <tr>
             <td class="font-bold text-blue-600">BR${String(r.borrow_id).padStart(3,'0')}</td>
-            ${!isStudent ? `<td class="font-semibold text-slate-800">${escapeHtml(r.student_name || r.full_name || '—')}</td>` : ''}
+            ${!isStudent ? `<td class="font-semibold text-slate-800">
+                <div>${escapeHtml(r.student_name || r.full_name || '—')}</div>
+                ${r.student_number ? `<div class="text-[10px] text-slate-400 font-mono font-medium">ID: ${escapeHtml(r.student_number)}</div>` : ''}
+            </td>` : ''}
             <td class="text-slate-700 font-medium max-w-[180px] truncate">${escapeHtml(r.copy_label || r.barcode)}</td>
             <td class="text-slate-500">${fmt(r.borrow_date)}</td>
-            <td class="text-slate-500">${fmt(r.due_date)}</td>
+            <td>${dueDisplay}</td>
             <td class="text-slate-400">${r.return_date ? fmt(r.return_date) : '—'}</td>
             <td>${badge(r.status)}</td>
             ${!isStudent ? `
             <td class="text-center">
                 ${r.status !== 'Returned' ? `
-                    <button onclick="returnBook(${r.borrow_id})" title="Record Book Return" class="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs px-2.5 py-1 rounded-md border border-emerald-300 transition-colors shadow-2xs cursor-pointer">
+                    <button onclick="returnBook(${r.borrow_id}, ${r.overdue_days || 0}, ${r.fine_amount || 0})" title="Record Book Return" class="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs px-2.5 py-1 rounded-md border border-emerald-300 transition-colors shadow-2xs cursor-pointer">
                         <i class="fa-solid fa-arrow-rotate-left text-[11px]"></i> Record Return
                     </button>
                 ` : `
@@ -1539,7 +1663,8 @@ async function renderBorrowing(page = 1, search = '', status = '') {
                     </span>
                 `}
             </td>` : ''}
-        </tr>`).join('') || emptyHtml;
+        </tr>`;
+    }).join('') || emptyHtml;
 
     const statusOptions = ['', 'Borrowed', 'Returned', 'Overdue'].map(s =>
         `<option value="${s}" ${s === status ? 'selected' : ''}>${s || 'All Statuses'}</option>`).join('');
@@ -1574,7 +1699,9 @@ async function renderBorrowing(page = 1, search = '', status = '') {
             <div class="relative flex-1 min-w-[200px] max-w-xs">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                 <input id="borrow-search" type="text" placeholder="Search records..." value="${search}"
-                    class="form-input pl-8" oninput="debounce(() => renderBorrowing(1, this.value, document.getElementById('borrow-status').value), 400)()">
+                    class="form-input pl-8" 
+                    oninput="handleSearchInput('borrow-search', () => renderBorrowing(1, document.getElementById('borrow-search').value, document.getElementById('borrow-status').value))"
+                    onkeydown="handleSearchInput('borrow-search', () => renderBorrowing(1, document.getElementById('borrow-search').value, document.getElementById('borrow-status').value), event)">
             </div>
             <select id="borrow-status" class="form-input w-40 text-sm" onchange="renderBorrowing(1, document.getElementById('borrow-search').value, this.value)">
                 ${statusOptions}
@@ -1661,8 +1788,9 @@ async function submitIssueBook(e) {
     } catch(err) { toast(err.message, 'error'); }
 }
 
-async function returnBook(borrowId) {
+async function returnBook(borrowId, overdueDays = 0, fineAmount = 0) {
     const today = new Date().toISOString().slice(0,10);
+    const hasPenalty = overdueDays > 0 && fineAmount > 0;
     showModal(`
     <div class="modal-overlay">
       <div class="modal-box max-w-sm">
@@ -1671,13 +1799,31 @@ async function returnBook(borrowId) {
             <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
         </div>
         <form class="px-6 py-5 space-y-4" onsubmit="submitReturn(event,${borrowId})">
+            ${hasPenalty ? `
+            <div class="bg-rose-50 border border-rose-200 text-rose-800 text-xs p-3.5 rounded-xl space-y-1.5 shadow-2xs">
+                <div class="font-black flex items-center gap-1.5 text-rose-900 text-sm">
+                    <i class="fa-solid fa-triangle-exclamation text-rose-600"></i> Overdue Return (${overdueDays} Days Past Due)
+                </div>
+                <div class="text-[11px] text-rose-700">
+                    Standard overdue penalty rate: <strong>₱10.00 / day</strong>
+                </div>
+                <div class="text-sm font-black text-rose-950 pt-2 border-t border-rose-200 flex items-center justify-between">
+                    <span>Penalty to Collect:</span>
+                    <span class="text-base text-rose-700 font-black">₱${Number(fineAmount).toFixed(2)}</span>
+                </div>
+            </div>
+            <label class="flex items-center gap-2 text-xs text-slate-700 bg-slate-50 p-2.5 rounded-lg border border-slate-200 select-none cursor-pointer">
+                <input type="checkbox" name="fine_collected" required checked class="rounded text-emerald-600 focus:ring-emerald-500">
+                <span class="font-semibold text-slate-800">Confirm fine of ₱${Number(fineAmount).toFixed(2)} collected from student</span>
+            </label>
+            ` : ''}
             <div>
                 <label class="form-label">Return Date *</label>
                 <input type="date" name="return_date" required class="form-input" value="${today}">
             </div>
-            <div class="flex justify-end gap-3">
+            <div class="flex justify-end gap-3 pt-1">
                 <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
-                <button type="submit" class="px-4 py-2 text-sm font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+                <button type="submit" class="px-4 py-2 text-sm font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-2xs">
                     <i class="fa-solid fa-check mr-1"></i> Confirm Return
                 </button>
             </div>
@@ -1748,9 +1894,18 @@ async function renderReservations(page = 1, search = '', status = '') {
     const rows = (data.data || []).map(r => `
         <tr>
             <td class="font-bold text-blue-600">R${String(r.reservation_id).padStart(3,'0')}</td>
-            ${!isStudent ? `<td class="font-semibold text-slate-800">${escapeHtml(r.student_name || r.full_name || '—')}</td>` : ''}
+            ${!isStudent ? `<td class="font-semibold text-slate-800">
+                <div>${escapeHtml(r.student_name || r.full_name || '—')}</div>
+                ${r.student_number ? `<div class="text-[10px] text-slate-400 font-mono font-medium">ID: ${escapeHtml(r.student_number)}</div>` : ''}
+            </td>` : ''}
             <td class="text-slate-800 font-medium">
-                ${escapeHtml(r.book_title)}
+                <div class="font-bold text-slate-900">${escapeHtml(r.book_title)}</div>
+                <div class="text-[11px] text-purple-700 font-medium mt-0.5 flex items-center gap-1.5 flex-wrap">
+                    <span class="inline-flex items-center gap-1 bg-purple-50 text-purple-800 px-1.5 py-0.5 rounded border border-purple-200">
+                        <i class="fa-solid fa-id-card text-purple-600"></i>
+                        <span>Reserved for: <strong>${escapeHtml(r.student_name || r.full_name || window.CURRENT_USER?.full_name || 'You')}</strong> (ID: <span class="font-mono font-bold">${escapeHtml(r.student_number || window.CURRENT_USER?.student_number || window.CURRENT_USER?.username || '—')}</span>)</span>
+                    </span>
+                </div>
                 ${r.reserved_barcode ? `<div class="text-[11px] text-slate-500 font-normal mt-0.5"><i class="fa-solid fa-barcode text-slate-400 mr-1"></i>Reserved Copy: <span class="font-mono font-semibold text-blue-600">${escapeHtml(r.reserved_barcode)}</span></div>` : ''}
             </td>
             <td class="text-slate-500">${fmt(r.reservation_date)}</td>
@@ -1805,7 +1960,9 @@ async function renderReservations(page = 1, search = '', status = '') {
             <div class="relative flex-1 min-w-[200px] max-w-xs">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                 <input id="res-search" type="text" placeholder="Search by book..." value="${search}"
-                    class="form-input pl-8" oninput="debounce(() => renderReservations(1, this.value, document.getElementById('res-status').value), 400)()">
+                    class="form-input pl-8" 
+                    oninput="handleSearchInput('res-search', () => renderReservations(1, document.getElementById('res-search').value, document.getElementById('res-status').value))"
+                    onkeydown="handleSearchInput('res-search', () => renderReservations(1, document.getElementById('res-search').value, document.getElementById('res-status').value), event)">
             </div>
             <select id="res-status" class="form-input w-40 text-sm" onchange="renderReservations(1, document.getElementById('res-search').value, this.value)">
                 ${statusOptions}
@@ -1914,6 +2071,38 @@ async function submitAddReservation(e) {
 }
 
 async function updateReservation(id, status) {
+    // When fulfilling, prompt staff to set borrow date and due date
+    if (status === 'Fulfilled') {
+        const today = new Date().toISOString().slice(0, 10);
+        const dueDate = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+        showModal(`
+        <div class="modal-overlay">
+          <div class="modal-box max-w-sm">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 text-base"><i class="fa-solid fa-circle-check mr-2 text-blue-600"></i>Fulfill Reservation</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form class="px-6 py-5 space-y-4" onsubmit="submitFulfillReservation(event, ${id})">
+                <div class="bg-blue-50 border border-blue-100 text-blue-700 text-xs p-3 rounded-lg">
+                    <i class="fa-solid fa-circle-info mr-1"></i> This will create a borrowing record and mark the reserved copy as Borrowed.
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="form-label">Borrow Date *</label>
+                        <input type="date" name="borrow_date" required class="form-input" value="${today}"></div>
+                    <div><label class="form-label">Due Date *</label>
+                        <input type="date" name="due_date" required class="form-input" value="${dueDate}"></div>
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-sm font-bold bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fa-solid fa-check mr-1"></i> Fulfill & Issue
+                    </button>
+                </div>
+            </form>
+          </div>
+        </div>`);
+        return;
+    }
     try {
         await api(`api/reservations.php?id=${id}`, 'PUT', { status });
         if (status === 'Approved') {
@@ -1926,6 +2115,25 @@ async function updateReservation(id, status) {
             toast(`Reservation ${status.toLowerCase()}!`);
         }
         renderReservations();
+    } catch(err) { toast(err.message, 'error'); }
+}
+
+async function submitFulfillReservation(e, reservationId) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    try {
+        await api(`api/reservations.php?id=${reservationId}`, 'PUT', {
+            status: 'Fulfilled',
+            borrow_date: fd.get('borrow_date'),
+            due_date: fd.get('due_date')
+        });
+        closeModal();
+        toast('Reservation fulfilled! Borrowing record created. 🎉', 'success');
+        if (State.currentPage === 'dashboard') {
+            renderDashboard();
+        } else {
+            renderReservations();
+        }
     } catch(err) { toast(err.message, 'error'); }
 }
 
@@ -1976,7 +2184,9 @@ async function renderStudents(page = 1, search = '') {
             <div class="relative max-w-xs">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                 <input id="stu-search" type="text" placeholder="Search students..." value="${search}"
-                    class="form-input pl-8" oninput="debounce(() => renderStudents(1, this.value), 400)()">
+                    class="form-input pl-8" 
+                    oninput="handleSearchInput('stu-search', () => renderStudents(1, document.getElementById('stu-search').value))"
+                    onkeydown="handleSearchInput('stu-search', () => renderStudents(1, document.getElementById('stu-search').value), event)">
             </div>
         </div>
         <div class="overflow-x-auto table-wrap">
@@ -2155,7 +2365,9 @@ async function renderUsers(page = 1, search = '') {
             <div class="relative max-w-xs">
                 <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                 <input id="usr-search" type="text" placeholder="Search librarians..." value="${escapeHtml(search)}"
-                    class="form-input pl-8" oninput="debounce(() => renderUsers(1, this.value), 400)()">
+                    class="form-input pl-8" 
+                    oninput="handleSearchInput('usr-search', () => renderUsers(1, document.getElementById('usr-search').value))"
+                    onkeydown="handleSearchInput('usr-search', () => renderUsers(1, document.getElementById('usr-search').value), event)">
             </div>
         </div>
         <div class="overflow-x-auto table-wrap">
@@ -2603,18 +2815,211 @@ function debounce(fn, delay) {
     };
 }
 
+// ─── Search Focus Preservation ────────────────────────────────────────────────
+// After page-content innerHTML is replaced, restore focus and cursor to the
+// search input that triggered the re-render so the user can keep typing.
+
+function restoreSearchFocus(inputId) {
+    requestAnimationFrame(() => {
+        const el = document.getElementById(inputId);
+        if (el) {
+            el.focus();
+            const len = el.value.length;
+            el.setSelectionRange(len, len);
+        }
+    });
+}
+
+// Debounced search handler: saves value, runs render, then restores focus and cursor
+const _searchTimers = {};
+function handleSearchInput(inputId, renderFn, evt) {
+    if (evt && evt.key === 'Enter') {
+        if (typeof evt.preventDefault === 'function') evt.preventDefault();
+        clearTimeout(_searchTimers[inputId]);
+        const el = document.getElementById(inputId);
+        const savedValue = el ? el.value : '';
+        const savedPos = el ? (el.selectionStart ?? savedValue.length) : savedValue.length;
+        Promise.resolve(renderFn()).then(() => {
+            requestAnimationFrame(() => {
+                const newEl = document.getElementById(inputId);
+                if (newEl) {
+                    newEl.value = savedValue;
+                    newEl.focus();
+                    newEl.setSelectionRange(savedPos, savedPos);
+                }
+            });
+        });
+        return;
+    }
+
+    clearTimeout(_searchTimers[inputId]);
+    _searchTimers[inputId] = setTimeout(async () => {
+        const el = document.getElementById(inputId);
+        const savedValue = el ? el.value : '';
+        const savedPos = el ? (el.selectionStart ?? savedValue.length) : savedValue.length;
+        await renderFn();
+        // After render replaced innerHTML, restore the input value and cursor
+        requestAnimationFrame(() => {
+            const newEl = document.getElementById(inputId);
+            if (newEl) {
+                newEl.value = savedValue;
+                newEl.focus();
+                newEl.setSelectionRange(savedPos, savedPos);
+            }
+        });
+    }, 400);
+}
+
 // ─── Global Search ────────────────────────────────────────────────────────────
 
-document.getElementById('global-search').addEventListener('input', debounce(function() {
-    const val = this.value.trim();
-    if (!val) return;
-    const page = State.currentPage;
-    if (page === 'books') renderBooks(1, val);
-    else if (page === 'students') renderStudents(1, val);
-    else if (page === 'borrowing') renderBorrowing(1, val);
-    else if (page === 'reservations') renderReservations(1, val);
-    else if (page === 'book_copies') renderBookCopies(1, val);
-}, 400));
+const globalSearchEl = document.getElementById('global-search');
+if (globalSearchEl) {
+    const runGlobalSearch = (val) => {
+        val = (val || '').trim();
+        const page = State.currentPage;
+        const searchPages = ['books', 'students', 'borrowing', 'reservations', 'book_copies'];
+        // If not on a searchable page, navigate to books with filter
+        if (!searchPages.includes(page)) {
+            if (val) {
+                navigateTo('books');
+                setTimeout(() => renderBooks(1, val), 60);
+            }
+            return;
+        }
+        // If on a searchable page, filter immediately
+        if (page === 'books') renderBooks(1, val);
+        else if (page === 'students') renderStudents(1, val);
+        else if (page === 'borrowing') renderBorrowing(1, val);
+        else if (page === 'reservations') renderReservations(1, val);
+        else if (page === 'book_copies') renderBookCopies(1, val);
+    };
+
+    globalSearchEl.addEventListener('input', debounce(function() {
+        runGlobalSearch(this.value);
+    }, 400));
+
+    globalSearchEl.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            const val = this.value.trim();
+            const cleanVal = val.replace(/[^0-9X]/gi, '');
+            // If it's a barcode scanner sequence handled by scanner listener, don't interrupt
+            if (cleanVal.length === 10 || cleanVal.length === 13 || /^BC-/i.test(val)) {
+                return;
+            }
+            e.preventDefault();
+            runGlobalSearch(val);
+        }
+    });
+}
+
+// ─── Real-Time Live Sync & Auto-Update ─────────────────────────────────────────
+// Keeps student and staff accounts synchronized without manual page refresh.
+// Detects when admin/librarian approves, rejects, or fulfills student reservations.
+
+let lastReservationsSnapshot = null;
+let isSyncInProgress = false;
+
+async function checkLiveUpdates() {
+    if (isSyncInProgress || document.hidden) return;
+    const role = (window.CURRENT_USER?.role || '').toLowerCase();
+    isSyncInProgress = true;
+    try {
+        if (role === 'user' || role === 'student') {
+            // Student account sync: monitor reservation status transitions
+            const res = await api('api/reservations.php?limit=50');
+            const reservations = res.data || [];
+            const currentMap = {};
+            reservations.forEach(r => {
+                currentMap[r.reservation_id] = {
+                    status: r.status,
+                    title: r.book_title || 'Book',
+                    barcode: r.reserved_barcode || ''
+                };
+            });
+
+            if (lastReservationsSnapshot !== null) {
+                let statusChanged = false;
+                for (const [id, curr] of Object.entries(currentMap)) {
+                    const prev = lastReservationsSnapshot[id];
+                    if (prev && prev.status !== curr.status) {
+                        statusChanged = true;
+                        if (curr.status === 'Approved') {
+                            toast(`🎉 Great news! Your reservation for "${curr.title}" was APPROVED! You can pick it up at the library counter.`, 'success');
+                        } else if (curr.status === 'Rejected') {
+                            toast(`ℹ️ Your reservation for "${curr.title}" was Rejected by library staff.`, 'info');
+                        } else if (curr.status === 'Fulfilled') {
+                            toast(`📚 Your reserved book "${curr.title}" has been ISSUED to your account!`, 'success');
+                        } else if (curr.status === 'Cancelled') {
+                            toast(`Reservation for "${curr.title}" was Cancelled.`, 'info');
+                        }
+                    }
+                }
+
+                // If any reservation changed status, re-render the active view in-place
+                if (statusChanged) {
+                    if (State.currentPage === 'dashboard') {
+                        renderDashboard();
+                    } else if (State.currentPage === 'reservations') {
+                        const p = State.pages.reservations || {};
+                        renderReservations(p.page || 1, p.search || '', p.status || '');
+                    } else if (State.currentPage === 'borrowing') {
+                        const p = State.pages.borrowing || {};
+                        renderBorrowing(p.page || 1, p.search || '', p.status || '');
+                    }
+                }
+            }
+            lastReservationsSnapshot = currentMap;
+        } else if (role === 'admin' || role === 'librarian') {
+            // Staff sync: monitor new reservations and update counts
+            if (State.currentPage === 'dashboard' || State.currentPage === 'reservations') {
+                const res = await api('api/reservations.php?limit=50');
+                const reservations = res.data || [];
+                const currentMap = {};
+                reservations.forEach(r => {
+                    currentMap[r.reservation_id] = r.status;
+                });
+
+                if (lastReservationsSnapshot !== null) {
+                    let changed = false;
+                    for (const [id, status] of Object.entries(currentMap)) {
+                        if (lastReservationsSnapshot[id] !== status) {
+                            changed = true;
+                            break;
+                        }
+                    }
+                    if (changed || Object.keys(currentMap).length !== Object.keys(lastReservationsSnapshot).length) {
+                        if (State.currentPage === 'dashboard') {
+                            renderDashboard();
+                        } else if (State.currentPage === 'reservations') {
+                            const p = State.pages.reservations || {};
+                            renderReservations(p.page || 1, p.search || '', p.status || '');
+                        }
+                    }
+                }
+                lastReservationsSnapshot = currentMap;
+            }
+        }
+    } catch (e) {
+        // Silently ignore background polling network errors
+    } finally {
+        isSyncInProgress = false;
+    }
+}
+
+function initLiveSync() {
+    // Poll every 3.5 seconds
+    setInterval(checkLiveUpdates, 3500);
+
+    // Immediate check when tab gains focus
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            checkLiveUpdates();
+        }
+    });
+
+    // Initial check after 1.2s to build baseline snapshot
+    setTimeout(checkLiveUpdates, 1200);
+}
 
 // ─── Sidebar Navigation Setup ─────────────────────────────────────────────────
 
@@ -2628,6 +3033,7 @@ document.querySelectorAll('.nav-item[data-page]').forEach(el => {
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 navigateTo('dashboard');
+initLiveSync();
 
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('welcome')) {

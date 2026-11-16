@@ -93,19 +93,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (empty($error)) {
                 $db->beginTransaction();
 
-                // Insert into students table
-                $sStmt = $db->prepare("
-                    INSERT INTO students (name, student_number, gender, year_level, course_id)
-                    VALUES (:name, :snum, :gender, :year, :course)
-                ");
-                $sStmt->execute([
-                    ':name'   => $fullName,
-                    ':snum'   => $studentNumber,
-                    ':gender' => $gender,
-                    ':year'   => $yearLevel,
-                    ':course' => $courseId,
-                ]);
-                $studentPk = (int)$db->lastInsertId();
+                $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+                if ($driver === 'pgsql') {
+                    $sStmt = $db->prepare("
+                        INSERT INTO students (name, student_number, gender, year_level, course_id)
+                        VALUES (:name, :snum, :gender, :year, :course)
+                        RETURNING id
+                    ");
+                    $sStmt->execute([
+                        ':name'   => $fullName,
+                        ':snum'   => $studentNumber,
+                        ':gender' => $gender,
+                        ':year'   => $yearLevel,
+                        ':course' => $courseId,
+                    ]);
+                    $studentPk = (int)$sStmt->fetchColumn();
+                } else {
+                    $sStmt = $db->prepare("
+                        INSERT INTO students (name, student_number, gender, year_level, course_id)
+                        VALUES (:name, :snum, :gender, :year, :course)
+                    ");
+                    $sStmt->execute([
+                        ':name'   => $fullName,
+                        ':snum'   => $studentNumber,
+                        ':gender' => $gender,
+                        ':year'   => $yearLevel,
+                        ':course' => $courseId,
+                    ]);
+                    $studentPk = (int)$db->lastInsertId();
+                }
 
                 // Hash password securely using standard bcrypt
                 $passwordHash = password_hash($password, PASSWORD_BCRYPT);

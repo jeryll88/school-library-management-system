@@ -1,11 +1,22 @@
 <?php
 require_once __DIR__ . '/../server/config/auth.php';
 $account = requirePageAccount();
+$studentNumber = null;
+if (!empty($account['student_id'])) {
+    try {
+        $db = getDB();
+        $sStmt = $db->prepare("SELECT student_number FROM students WHERE id = :id LIMIT 1");
+        $sStmt->execute([':id' => $account['student_id']]);
+        $studentNumber = $sStmt->fetchColumn() ?: null;
+    } catch (Throwable $e) {}
+}
 $currentUser = [
-    'id'        => $account['user_id'],
-    'username'  => $account['username'],
-    'full_name' => $account['full_name'],
-    'role'      => $account['role'],
+    'id'             => $account['user_id'],
+    'username'       => $account['username'],
+    'full_name'      => $account['full_name'],
+    'role'           => $account['role'],
+    'student_id'     => $account['student_id'] ?? null,
+    'student_number' => $studentNumber,
 ];
 $avatarLetter = strtoupper(substr($currentUser['full_name'] ?: $currentUser['username'], 0, 1));
 $displayRole  = ($currentUser['role'] === 'User') ? 'Student' : $currentUser['role'];
