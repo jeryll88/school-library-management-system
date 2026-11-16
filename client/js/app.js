@@ -390,7 +390,7 @@ function renderStudentDashboard(data) {
             <div class="stat-icon bg-blue-50 text-blue-600"><i class="fa-solid fa-book-bookmark"></i></div>
             <div>
                 <div class="text-xs text-slate-500 font-semibold flex items-center gap-1.5">
-                    <span>Active Loans</span>
+                    <span>Active Borrowing</span>
                     <span class="text-[9px] bg-blue-100 text-blue-700 px-1 py-0.2 rounded font-bold">Quota: ${s.borrow_quota || 3}</span>
                 </div>
                 <div class="text-2xl font-black text-slate-800">${s.my_borrowed || 0} <span class="text-xs text-slate-400 font-semibold">/ ${s.borrow_quota || 3}</span></div>
@@ -469,13 +469,13 @@ function renderStudentDashboard(data) {
         </div>
     </div>
 
-    <!-- Two-column: My Loans & My Reservations -->
+    <!-- Two-column: My Borrowings & My Reservations -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <!-- My Borrowings -->
         <div class="section-card overflow-hidden">
             <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
                 <span class="font-bold text-slate-800 text-sm flex items-center gap-2">
-                    <i class="fa-solid fa-book-open text-blue-600"></i> My Current Loans
+                    <i class="fa-solid fa-book-open text-blue-600"></i> My Active Borrowings
                 </span>
                 <button onclick="navigateTo('borrowing')" class="text-blue-600 font-semibold text-xs hover:underline">View History →</button>
             </div>
@@ -745,7 +745,7 @@ function renderAdminDashboard(data) {
         </div>
         <div class="stat-card">
             <div class="stat-icon bg-amber-50 text-amber-600"><i class="fa-solid fa-hand-holding-hand"></i></div>
-            <div><div class="text-[10px] text-slate-500 font-semibold uppercase">Active Loans</div>
+            <div><div class="text-[10px] text-slate-500 font-semibold uppercase">Active Borrowings</div>
             <div class="text-xl font-black text-slate-800">${s.active_borrowings || 0}</div></div>
         </div>
         <div class="stat-card">
@@ -1549,7 +1549,7 @@ async function renderBorrowing(page = 1, search = '', status = '') {
             </button>
         </div>` : `
         <div class="flex items-center gap-2">
-            <button onclick="exportBorrowingCsv()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer" title="Export your loan history to CSV">
+            <button onclick="exportBorrowingCsv()" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer" title="Export your borrowing history to CSV">
                 <i class="fa-solid fa-file-csv text-emerald-600"></i> Export History
             </button>
             <button onclick="navigateTo('books')" class="bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-1.5 shadow-sm transition-colors">
