@@ -125,3 +125,4 @@ Once deployed on either platform, log in at `/login.php`:
 | **Librarian** | `librarian` | *(seeded bcrypt)* | Circulation desk, barcode scanner, catalog management |
 | **Librarian** | `ikang` | *(seeded bcrypt)* | Circulation operations |
 | **Student** | *(self-register)* | *(your choice)* | Click "Register as Student" on `/register.php` |
+

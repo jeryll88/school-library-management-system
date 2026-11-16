@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Diagram Viewer & Exporter — Library Management System</title>
+    <title>Interactive Diagram Viewer &amp; Exporter — Library Management System</title>
     <style>
         :root {
             --primary: #1e40af;
@@ -26,11 +26,11 @@
         header {
             background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
             color: white;
-            padding: 20px 32px;
+            padding: 18px 28px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.12);
         }
         .header-container {
-            max-width: 1500px;
+            max-width: 1600px;
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
@@ -51,7 +51,7 @@
             background: transparent;
             border: none;
             color: white;
-            padding: 8px 18px;
+            padding: 9px 20px;
             border-radius: 8px;
             cursor: pointer;
             font-weight: 700;
@@ -65,10 +65,10 @@
         }
         main {
             flex: 1;
-            max-width: 1500px;
+            max-width: 1600px;
             width: 100%;
-            margin: 20px auto;
-            padding: 0 20px;
+            margin: 16px auto;
+            padding: 0 16px;
         }
         .panel {
             display: none;
@@ -83,26 +83,27 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 14px 24px;
+            padding: 12px 20px;
             background: #f1f5f9;
             border-bottom: 1px solid var(--border);
             flex-wrap: wrap;
             gap: 12px;
         }
         .toolbar-info { font-weight: 700; font-size: 14px; color: #334155; }
-        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
         .action-btn {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            padding: 8px 14px;
+            padding: 7px 13px;
             border-radius: 8px;
-            font-size: 13px;
+            font-size: 12.5px;
             font-weight: 600;
             text-decoration: none;
             cursor: pointer;
             border: 1px solid transparent;
             transition: all 0.15s;
+            user-select: none;
         }
         .btn-primary { background: #2563eb; color: white; }
         .btn-primary:hover { background: #1d4ed8; }
@@ -110,18 +111,63 @@
         .btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
         .btn-drawio { background: #ea580c; color: white; }
         .btn-drawio:hover { background: #c2410c; }
-        .diagram-container {
-            padding: 24px;
+        .btn-success { background: #16a34a; color: white; }
+        .btn-success:hover { background: #15803d; }
+        .btn-indigo { background: #6366f1; color: white; }
+        .btn-indigo:hover { background: #4f46e5; }
+        .zoom-controls {
+            display: inline-flex;
+            align-items: center;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .zoom-btn {
+            background: transparent;
+            border: none;
+            padding: 6px 12px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 13px;
+            color: #334155;
+            transition: background 0.15s;
+        }
+        .zoom-btn:hover { background: #f1f5f9; }
+        .zoom-label {
+            padding: 6px 10px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #475569;
+            border-left: 1px solid var(--border);
+            border-right: 1px solid var(--border);
+            min-width: 54px;
+            text-align: center;
+        }
+        .diagram-viewport {
             overflow: auto;
-            min-height: 600px;
+            min-height: 650px;
+            max-height: 82vh;
+            background: #ffffff;
+            padding: 24px;
             display: flex;
             justify-content: center;
+            align-items: flex-start;
+        }
+        .svg-scale-wrapper {
+            transform-origin: top center;
+            transition: transform 0.15s ease-out;
+            display: inline-block;
+        }
+        .svg-scale-wrapper svg {
+            display: block;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            border-radius: 10px;
             background: #ffffff;
         }
-        svg { max-width: 100%; height: auto; }
         footer {
             text-align: center;
-            padding: 16px;
+            padding: 14px;
             font-size: 12px;
             color: #64748b;
             background: #f1f5f9;
@@ -135,11 +181,11 @@
         <div class="header-container">
             <div class="title">
                 <h1>📚 School Library Management System</h1>
-                <p>Complete Software Architecture Diagrams (Entity-Relationship & Use Case Models)</p>
+                <p>Complete Software Architecture Models (Entity-Relationship &amp; Use Case Diagrams)</p>
             </div>
             <div class="tab-nav">
-                <button class="tab-btn" onclick="switchTab('erd')">📊 Entity-Relationship Diagram (ERD)</button>
                 <button class="tab-btn active" onclick="switchTab('ucd')">👥 Use Case Diagram (UCD)</button>
+                <button class="tab-btn" onclick="switchTab('erd')">📊 Entity-Relationship Diagram (ERD)</button>
             </div>
         </div>
     </header>
@@ -154,251 +200,244 @@
                     🎯 Use Case Architecture: 3 Actors (Student, Librarian, Admin) &amp; 25 Functional Use Cases
                 </div>
                 <div class="btn-group">
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" onclick="zoom('ucd', -0.1)" title="Zoom Out">➖</button>
+                        <span id="zoom-label-ucd" class="zoom-label">100%</span>
+                        <button class="zoom-btn" onclick="zoom('ucd', 0.1)" title="Zoom In">➕</button>
+                        <button class="zoom-btn" onclick="resetZoom('ucd')" title="Reset Zoom">🔄 100%</button>
+                        <button class="zoom-btn" onclick="fitWidth('ucd')" title="Fit to Screen Width">📐 Fit</button>
+                    </div>
+                    <button onclick="exportSVG('ucd-svg', 'UCD_Library_Management_System.svg')" class="action-btn btn-indigo">
+                        📥 Export SVG
+                    </button>
+                    <button onclick="exportPNG('ucd-svg', 'UCD_Library_Management_System.png')" class="action-btn btn-success">
+                        🖼️ Export PNG
+                    </button>
                     <a href="UCD_Library_Management_System.drawio" download class="action-btn btn-drawio">
-                        📥 Download UCD (.drawio)
+                        📥 Download .drawio
                     </a>
                     <a href="UCD_Library_Management_System.puml" download class="action-btn btn-secondary">
-                        📥 Download PlantUML (.puml)
+                        📥 PlantUML (.puml)
                     </a>
                     <a href="https://app.diagrams.net/" target="_blank" class="action-btn btn-primary">
                         ✏️ Open in diagrams.net
                     </a>
                 </div>
             </div>
-            <div class="diagram-container">
-                <svg width="1440" height="1100" viewBox="0 0 1440 1100" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                        <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
-                            <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.08"/>
-                        </filter>
-                    </defs>
+            <div id="viewport-ucd" class="diagram-viewport">
+                <div id="scale-ucd" class="svg-scale-wrapper">
+                    <svg id="ucd-svg" width="1440" height="1100" viewBox="0 0 1440 1100" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+                                <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.08"/>
+                            </filter>
+                        </defs>
 
-                    <!-- System Boundary -->
-                    <rect x="240" y="30" width="960" height="1040" rx="16" fill="#FFFFFF" stroke="#2563EB" stroke-width="2.5" filter="url(#shadow)"/>
-                    <rect x="240" y="30" width="960" height="42" rx="16" fill="#1E3A8A"/>
-                    <rect x="240" y="56" width="960" height="16" fill="#1E3A8A"/>
-                    <text x="720" y="58" font-family="sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF" text-anchor="middle">
-                        School Library Management System (LIBRARY_MS)
-                    </text>
+                        <!-- System Boundary -->
+                        <rect x="240" y="30" width="960" height="1040" rx="16" fill="#FFFFFF" stroke="#2563EB" stroke-width="2.5" filter="url(#shadow)"/>
+                        <rect x="240" y="30" width="960" height="42" rx="16" fill="#1E3A8A"/>
+                        <rect x="240" y="56" width="960" height="16" fill="#1E3A8A"/>
+                        <text x="720" y="58" font-family="sans-serif" font-size="16" font-weight="bold" fill="#FFFFFF" text-anchor="middle">
+                            School Library Management System (LIBRARY_MS)
+                        </text>
 
-                    <!-- ========================================== -->
-                    <!-- LEFT ACTOR: STUDENT -->
-                    <!-- ========================================== -->
-                    <g transform="translate(60, 240)">
-                        <circle cx="50" cy="30" r="16" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="2.5"/>
-                        <line x1="50" y1="46" x2="50" y2="90" stroke="#1D4ED8" stroke-width="2.5"/>
-                        <line x1="20" y1="62" x2="80" y2="62" stroke="#1D4ED8" stroke-width="2.5"/>
-                        <line x1="50" y1="90" x2="25" y2="135" stroke="#1D4ED8" stroke-width="2.5"/>
-                        <line x1="50" y1="90" x2="75" y2="135" stroke="#1D4ED8" stroke-width="2.5"/>
-                        <rect x="0" y="145" width="100" height="34" rx="6" fill="#1E3A8A"/>
-                        <text x="50" y="162" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Student</text>
-                        <text x="50" y="174" font-family="sans-serif" font-size="10" fill="#93C5FD" text-anchor="middle">(Borrower)</text>
-                    </g>
+                        <!-- LEFT ACTOR: STUDENT -->
+                        <g transform="translate(60, 240)">
+                            <circle cx="50" cy="30" r="16" fill="#DBEAFE" stroke="#1D4ED8" stroke-width="2.5"/>
+                            <line x1="50" y1="46" x2="50" y2="90" stroke="#1D4ED8" stroke-width="2.5"/>
+                            <line x1="20" y1="62" x2="80" y2="62" stroke="#1D4ED8" stroke-width="2.5"/>
+                            <line x1="50" y1="90" x2="25" y2="135" stroke="#1D4ED8" stroke-width="2.5"/>
+                            <line x1="50" y1="90" x2="75" y2="135" stroke="#1D4ED8" stroke-width="2.5"/>
+                            <rect x="0" y="145" width="100" height="34" rx="6" fill="#1E3A8A"/>
+                            <text x="50" y="162" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Student</text>
+                            <text x="50" y="174" font-family="sans-serif" font-size="10" fill="#93C5FD" text-anchor="middle">(Borrower)</text>
+                        </g>
 
-                    <!-- ========================================== -->
-                    <!-- LEFT ACTOR: LIBRARIAN -->
-                    <!-- ========================================== -->
-                    <g transform="translate(60, 660)">
-                        <circle cx="50" cy="30" r="16" fill="#DCFCE7" stroke="#15803D" stroke-width="2.5"/>
-                        <line x1="50" y1="46" x2="50" y2="90" stroke="#15803D" stroke-width="2.5"/>
-                        <line x1="20" y1="62" x2="80" y2="62" stroke="#15803D" stroke-width="2.5"/>
-                        <line x1="50" y1="90" x2="25" y2="135" stroke="#15803D" stroke-width="2.5"/>
-                        <line x1="50" y1="90" x2="75" y2="135" stroke="#15803D" stroke-width="2.5"/>
-                        <rect x="0" y="145" width="100" height="34" rx="6" fill="#14532D"/>
-                        <text x="50" y="162" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Librarian</text>
-                        <text x="50" y="174" font-family="sans-serif" font-size="10" fill="#86EFAC" text-anchor="middle">(Circulation)</text>
-                    </g>
+                        <!-- LEFT ACTOR: LIBRARIAN -->
+                        <g transform="translate(60, 660)">
+                            <circle cx="50" cy="30" r="16" fill="#DCFCE7" stroke="#15803D" stroke-width="2.5"/>
+                            <line x1="50" y1="46" x2="50" y2="90" stroke="#15803D" stroke-width="2.5"/>
+                            <line x1="20" y1="62" x2="80" y2="62" stroke="#15803D" stroke-width="2.5"/>
+                            <line x1="50" y1="90" x2="25" y2="135" stroke="#15803D" stroke-width="2.5"/>
+                            <line x1="50" y1="90" x2="75" y2="135" stroke="#15803D" stroke-width="2.5"/>
+                            <rect x="0" y="145" width="100" height="34" rx="6" fill="#14532D"/>
+                            <text x="50" y="162" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Librarian</text>
+                            <text x="50" y="174" font-family="sans-serif" font-size="10" fill="#86EFAC" text-anchor="middle">(Circulation)</text>
+                        </g>
 
-                    <!-- ========================================== -->
-                    <!-- RIGHT ACTOR: ADMINISTRATOR -->
-                    <!-- ========================================== -->
-                    <g transform="translate(1280, 460)">
-                        <circle cx="50" cy="30" r="16" fill="#FEE2E2" stroke="#B91C1C" stroke-width="2.5"/>
-                        <line x1="50" y1="46" x2="50" y2="90" stroke="#B91C1C" stroke-width="2.5"/>
-                        <line x1="20" y1="62" x2="80" y2="62" stroke="#B91C1C" stroke-width="2.5"/>
-                        <line x1="50" y1="90" x2="25" y2="135" stroke="#B91C1C" stroke-width="2.5"/>
-                        <line x1="50" y1="90" x2="75" y2="135" stroke="#B91C1C" stroke-width="2.5"/>
-                        <rect x="0" y="145" width="100" height="34" rx="6" fill="#7F1D1D"/>
-                        <text x="50" y="162" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Administrator</text>
-                        <text x="50" y="174" font-family="sans-serif" font-size="10" fill="#FCA5A5" text-anchor="middle">(System Admin)</text>
-                    </g>
+                        <!-- RIGHT ACTOR: ADMINISTRATOR -->
+                        <g transform="translate(1280, 460)">
+                            <circle cx="50" cy="30" r="16" fill="#FEE2E2" stroke="#B91C1C" stroke-width="2.5"/>
+                            <line x1="50" y1="46" x2="50" y2="90" stroke="#B91C1C" stroke-width="2.5"/>
+                            <line x1="20" y1="62" x2="80" y2="62" stroke="#B91C1C" stroke-width="2.5"/>
+                            <line x1="50" y1="90" x2="25" y2="135" stroke="#B91C1C" stroke-width="2.5"/>
+                            <line x1="50" y1="90" x2="75" y2="135" stroke="#B91C1C" stroke-width="2.5"/>
+                            <rect x="0" y="145" width="100" height="34" rx="6" fill="#7F1D1D"/>
+                            <text x="50" y="162" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">Administrator</text>
+                            <text x="50" y="174" font-family="sans-serif" font-size="10" fill="#FCA5A5" text-anchor="middle">(System Admin)</text>
+                        </g>
 
-                    <!-- ========================================== -->
-                    <!-- SUB-SYSTEM 1: AUTH & GATEWAY -->
-                    <!-- ========================================== -->
-                    <rect x="270" y="90" width="900" height="150" rx="10" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4 4"/>
-                    <text x="285" y="110" font-family="sans-serif" font-size="12" font-weight="bold" fill="#475569">1. Authentication &amp; Security Gateways</text>
+                        <!-- SUB-SYSTEM 1: AUTH & SECURITY GATEWAYS -->
+                        <rect x="270" y="90" width="900" height="150" rx="10" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4 4"/>
+                        <text x="285" y="110" font-family="sans-serif" font-size="12" font-weight="bold" fill="#475569">1. Authentication &amp; Security Gateways</text>
 
-                    <!-- UC01 -->
-                    <ellipse cx="370" cy="165" rx="85" ry="24" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
-                    <text x="370" y="169" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1E40AF" text-anchor="middle">UC01: Register Student</text>
+                        <!-- UC01 -->
+                        <ellipse cx="370" cy="165" rx="85" ry="24" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
+                        <text x="370" y="169" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1E40AF" text-anchor="middle">UC01: Register Student</text>
 
-                    <!-- UC02 -->
-                    <ellipse cx="570" cy="165" rx="90" ry="24" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
-                    <text x="570" y="169" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1E40AF" text-anchor="middle">UC02: Sign In / Authenticate</text>
+                        <!-- UC02 -->
+                        <ellipse cx="570" cy="165" rx="90" ry="24" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
+                        <text x="570" y="169" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1E40AF" text-anchor="middle">UC02: Sign In / Authenticate</text>
 
-                    <!-- UC03 -->
-                    <ellipse cx="780" cy="165" rx="95" ry="24" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
-                    <text x="780" y="169" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1E40AF" text-anchor="middle">UC03: Recover Password</text>
+                        <!-- UC03 -->
+                        <ellipse cx="780" cy="165" rx="95" ry="24" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
+                        <text x="780" y="169" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1E40AF" text-anchor="middle">UC03: Recover Password</text>
 
-                    <!-- UC04 -->
-                    <ellipse cx="1020" cy="165" rx="95" ry="24" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
-                    <text x="1020" y="169" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1E40AF" text-anchor="middle">UC04: Manage Profile</text>
+                        <!-- UC04 -->
+                        <ellipse cx="1020" cy="165" rx="95" ry="24" fill="#EFF6FF" stroke="#3B82F6" stroke-width="2"/>
+                        <text x="1020" y="169" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1E40AF" text-anchor="middle">UC04: Manage Profile</text>
 
-                    <!-- ========================================== -->
-                    <!-- SUB-SYSTEM 2: STUDENT PORTAL -->
-                    <!-- ========================================== -->
-                    <rect x="270" y="260" width="900" height="170" rx="10" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4 4"/>
-                    <text x="285" y="280" font-family="sans-serif" font-size="12" font-weight="bold" fill="#475569">2. Student Portal &amp; Discovery Services</text>
+                        <!-- SUB-SYSTEM 2: STUDENT PORTAL -->
+                        <rect x="270" y="260" width="900" height="170" rx="10" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4 4"/>
+                        <text x="285" y="280" font-family="sans-serif" font-size="12" font-weight="bold" fill="#475569">2. Student Portal &amp; Discovery Services</text>
 
-                    <!-- UC05 -->
-                    <ellipse cx="380" cy="330" rx="95" ry="24" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
-                    <text x="380" y="334" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1D4ED8" text-anchor="middle">UC05: View Student Dashboard</text>
+                        <!-- UC05 -->
+                        <ellipse cx="380" cy="330" rx="95" ry="24" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+                        <text x="380" y="334" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1D4ED8" text-anchor="middle">UC05: View Student Dashboard</text>
 
-                    <!-- UC06 -->
-                    <ellipse cx="610" cy="330" rx="110" ry="24" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
-                    <text x="610" y="334" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1D4ED8" text-anchor="middle">UC06: Search &amp; Filter Catalog</text>
+                        <!-- UC06 -->
+                        <ellipse cx="610" cy="330" rx="110" ry="24" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+                        <text x="610" y="334" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1D4ED8" text-anchor="middle">UC06: Search &amp; Filter Catalog</text>
 
-                    <!-- UC07 -->
-                    <ellipse cx="870" cy="330" rx="115" ry="24" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
-                    <text x="870" y="334" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1D4ED8" text-anchor="middle">UC07: View Book Availability</text>
+                        <!-- UC07 -->
+                        <ellipse cx="850" cy="330" rx="105" ry="24" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+                        <text x="850" y="334" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1D4ED8" text-anchor="middle">UC07: Check Copy Availability</text>
 
-                    <!-- UC08 -->
-                    <ellipse cx="480" cy="390" rx="110" ry="24" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
-                    <text x="480" y="394" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1D4ED8" text-anchor="middle">UC08: Place Book Reservation</text>
+                        <!-- UC08 -->
+                        <ellipse cx="490" cy="390" rx="95" ry="24" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+                        <text x="490" y="394" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1D4ED8" text-anchor="middle">UC08: Place Book Reservation</text>
 
-                    <!-- UC09 -->
-                    <ellipse cx="760" cy="390" rx="115" ry="24" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
-                    <text x="760" y="394" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1D4ED8" text-anchor="middle">UC09: Track Loans &amp; Due Dates</text>
+                        <!-- UC09 -->
+                        <ellipse cx="730" cy="390" rx="105" ry="24" fill="#EFF6FF" stroke="#2563EB" stroke-width="2"/>
+                        <text x="730" y="394" font-family="sans-serif" font-size="11" font-weight="bold" fill="#1D4ED8" text-anchor="middle">UC09: Track Loans &amp; Due Dates</text>
 
-                    <!-- ========================================== -->
-                    <!-- SUB-SYSTEM 3: CIRCULATION DESK -->
-                    <!-- ========================================== -->
-                    <rect x="270" y="450" width="900" height="260" rx="10" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4 4"/>
-                    <text x="285" y="470" font-family="sans-serif" font-size="12" font-weight="bold" fill="#475569">3. Circulation Desk &amp; Inventory Operations</text>
+                        <!-- SUB-SYSTEM 3: CIRCULATION DESK -->
+                        <rect x="270" y="450" width="900" height="260" rx="10" fill="#F0FDF4" stroke="#86EFAC" stroke-width="1.5" stroke-dasharray="4 4"/>
+                        <text x="285" y="470" font-family="sans-serif" font-size="12" font-weight="bold" fill="#166534">3. Circulation Desk &amp; Inventory Operations</text>
 
-                    <!-- UC10 -->
-                    <ellipse cx="400" cy="520" rx="110" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
-                    <text x="400" y="524" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC10: Circulation Dashboard</text>
+                        <!-- UC10 -->
+                        <ellipse cx="410" cy="515" rx="100" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
+                        <text x="410" y="519" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC10: Circulation Overview</text>
 
-                    <!-- UC11 -->
-                    <ellipse cx="680" cy="520" rx="125" ry="26" fill="#FEF9C3" stroke="#CA8A04" stroke-width="2.5"/>
-                    <text x="680" y="524" font-family="sans-serif" font-size="11" font-weight="bold" fill="#854D0E" text-anchor="middle">⚡ UC11: Scan Barcode / ISBN</text>
+                        <!-- UC11 -->
+                        <ellipse cx="660" cy="515" rx="110" ry="24" fill="#FEF9C3" stroke="#CA8A04" stroke-width="2"/>
+                        <text x="660" y="519" font-family="sans-serif" font-size="11" font-weight="bold" fill="#854D0E" text-anchor="middle">UC11: Scan Hardware Barcode</text>
 
-                    <!-- UC12 -->
-                    <ellipse cx="980" cy="520" rx="115" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
-                    <text x="980" y="524" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC12: Add / Edit Book Titles</text>
+                        <!-- UC12 -->
+                        <ellipse cx="920" cy="515" rx="105" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
+                        <text x="920" y="519" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC12: Add / Edit Book Metadata</text>
 
-                    <!-- UC13 -->
-                    <ellipse cx="420" cy="590" rx="120" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
-                    <text x="420" y="594" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC13: Issue Book to Student</text>
+                        <!-- UC13 -->
+                        <ellipse cx="410" cy="580" rx="100" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
+                        <text x="410" y="584" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC13: Issue Copy to Student</text>
 
-                    <!-- UC14 -->
-                    <ellipse cx="700" cy="590" rx="110" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
-                    <text x="700" y="594" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC14: Process Book Return</text>
+                        <!-- UC14 -->
+                        <ellipse cx="660" cy="580" rx="100" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
+                        <text x="660" y="584" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC14: Process Book Return</text>
 
-                    <!-- UC15 -->
-                    <ellipse cx="980" cy="590" rx="115" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
-                    <text x="980" y="594" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC15: Manage Physical Copies</text>
+                        <!-- UC15 -->
+                        <ellipse cx="920" cy="580" rx="105" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
+                        <text x="920" y="584" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC15: Manage Physical Copies</text>
 
-                    <!-- UC16 -->
-                    <ellipse cx="520" cy="660" rx="120" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
-                    <text x="520" y="664" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC16: Monitor Overdue Loans</text>
+                        <!-- UC16 -->
+                        <ellipse cx="530" cy="650" rx="105" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
+                        <text x="530" y="654" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC16: Monitor Overdue Loans</text>
 
-                    <!-- UC17 -->
-                    <ellipse cx="820" cy="660" rx="120" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
-                    <text x="820" y="664" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC17: Process Holds Queue</text>
+                        <!-- UC17 -->
+                        <ellipse cx="790" cy="650" rx="110" ry="24" fill="#F0FDF4" stroke="#16A34A" stroke-width="2"/>
+                        <text x="790" y="654" font-family="sans-serif" font-size="11" font-weight="bold" fill="#15803D" text-anchor="middle">UC17: Process Reservation Queue</text>
 
-                    <!-- ========================================== -->
-                    <!-- SUB-SYSTEM 4: ADMINISTRATION -->
-                    <!-- ========================================== -->
-                    <rect x="270" y="730" width="900" height="310" rx="10" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4 4"/>
-                    <text x="285" y="750" font-family="sans-serif" font-size="12" font-weight="bold" fill="#475569">4. System Administration &amp; Governance</text>
+                        <!-- SUB-SYSTEM 4: SYSTEM ADMINISTRATION -->
+                        <rect x="270" y="730" width="900" height="320" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.5" stroke-dasharray="4 4"/>
+                        <text x="285" y="750" font-family="sans-serif" font-size="12" font-weight="bold" fill="#991B1B">4. System Administration &amp; Governance</text>
 
-                    <!-- UC18 -->
-                    <ellipse cx="440" cy="800" rx="120" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
-                    <text x="440" y="804" font-family="sans-serif" font-size="11" font-weight="bold" fill="#991B1B" text-anchor="middle">UC18: Executive System Analytics</text>
+                        <!-- UC18 -->
+                        <ellipse cx="430" cy="800" rx="115" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+                        <text x="430" y="804" font-family="sans-serif" font-size="11" font-weight="bold" fill="#B91C1C" text-anchor="middle">UC18: Executive System Overview</text>
 
-                    <!-- UC19 -->
-                    <ellipse cx="760" cy="800" rx="135" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
-                    <text x="760" y="804" font-family="sans-serif" font-size="11" font-weight="bold" fill="#991B1B" text-anchor="middle">UC19: Provision Staff (Employee ID)</text>
+                        <!-- UC19 -->
+                        <ellipse cx="730" cy="800" rx="135" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+                        <text x="730" y="804" font-family="sans-serif" font-size="11" font-weight="bold" fill="#B91C1C" text-anchor="middle">UC19: Provision Librarian (Employee ID)</text>
 
-                    <!-- UC20 -->
-                    <ellipse cx="1020" cy="800" rx="120" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
-                    <text x="1020" y="804" font-family="sans-serif" font-size="11" font-weight="bold" fill="#991B1B" text-anchor="middle">UC20: Toggle Account Active</text>
+                        <!-- UC20 -->
+                        <ellipse cx="1020" cy="800" rx="115" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+                        <text x="1020" y="804" font-family="sans-serif" font-size="11" font-weight="bold" fill="#B91C1C" text-anchor="middle">UC20: Manage Student Directory</text>
 
-                    <!-- UC21 -->
-                    <ellipse cx="440" cy="875" rx="120" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
-                    <text x="440" y="879" font-family="sans-serif" font-size="11" font-weight="bold" fill="#991B1B" text-anchor="middle">UC21: Activity Trail &amp; Audit Logs</text>
+                        <!-- UC21 -->
+                        <ellipse cx="430" cy="875" rx="115" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+                        <text x="430" y="879" font-family="sans-serif" font-size="11" font-weight="bold" fill="#B91C1C" text-anchor="middle">UC21: Audit Security Activity Logs</text>
 
-                    <!-- UC22 -->
-                    <ellipse cx="760" cy="875" rx="125" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
-                    <text x="760" y="879" font-family="sans-serif" font-size="11" font-weight="bold" fill="#991B1B" text-anchor="middle">UC22: Manage Student Roster</text>
+                        <!-- UC22 -->
+                        <ellipse cx="730" cy="875" rx="125" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+                        <text x="730" y="879" font-family="sans-serif" font-size="11" font-weight="bold" fill="#B91C1C" text-anchor="middle">UC22: Activate / Deactivate Accounts</text>
 
-                    <!-- UC23 -->
-                    <ellipse cx="1020" cy="875" rx="120" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
-                    <text x="1020" y="879" font-family="sans-serif" font-size="11" font-weight="bold" fill="#991B1B" text-anchor="middle">UC23: Manage Categories</text>
+                        <!-- UC23 -->
+                        <ellipse cx="1020" cy="875" rx="115" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+                        <text x="1020" y="879" font-family="sans-serif" font-size="11" font-weight="bold" fill="#B91C1C" text-anchor="middle">UC23: Manage Degree Programs</text>
 
-                    <!-- UC24 -->
-                    <ellipse cx="600" cy="950" rx="125" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
-                    <text x="600" y="954" font-family="sans-serif" font-size="11" font-weight="bold" fill="#991B1B" text-anchor="middle">UC24: Manage Degree Programs</text>
+                        <!-- UC24 -->
+                        <ellipse cx="580" cy="950" rx="125" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+                        <text x="580" y="954" font-family="sans-serif" font-size="11" font-weight="bold" fill="#B91C1C" text-anchor="middle">UC24: Manage Book Categories</text>
 
-                    <!-- UC25 -->
-                    <ellipse cx="900" cy="950" rx="125" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
-                    <text x="900" y="954" font-family="sans-serif" font-size="11" font-weight="bold" fill="#991B1B" text-anchor="middle">UC25: Integrity Rule Enforcement</text>
+                        <!-- UC25 -->
+                        <ellipse cx="880" cy="950" rx="120" ry="24" fill="#FEF2F2" stroke="#DC2626" stroke-width="2"/>
+                        <text x="880" y="954" font-family="sans-serif" font-size="11" font-weight="bold" fill="#B91C1C" text-anchor="middle">UC25: Configure System Policies</text>
 
-                    <!-- ========================================== -->
-                    <!-- CONNECTIONS: STUDENT (BLUE) -->
-                    <!-- ========================================== -->
-                    <path d="M 160 300 L 285 165" stroke="#2563EB" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 310 L 480 165" stroke="#2563EB" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 320 L 685 165" stroke="#2563EB" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 330 L 285 330" stroke="#2563EB" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 340 L 500 330" stroke="#2563EB" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 350 L 755 330" stroke="#2563EB" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 360 L 370 390" stroke="#2563EB" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 370 L 645 390" stroke="#2563EB" stroke-width="1.6" fill="none"/>
+                        <!-- RELATIONSHIP LINES -->
+                        <!-- Student -> UC Lines -->
+                        <path d="M 160 300 L 290 175" stroke="#1D4ED8" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 310 L 485 175" stroke="#1D4ED8" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 320 L 290 330" stroke="#1D4ED8" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 330 L 500 330" stroke="#1D4ED8" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 340 L 400 390" stroke="#1D4ED8" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 350 L 630 390" stroke="#1D4ED8" stroke-width="1.6" fill="none"/>
 
-                    <!-- ========================================== -->
-                    <!-- CONNECTIONS: LIBRARIAN (GREEN) -->
-                    <!-- ========================================== -->
-                    <path d="M 160 700 L 480 165" stroke="#16A34A" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 710 L 290 520" stroke="#16A34A" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 720 L 555 520" stroke="#CA8A04" stroke-width="2.2" fill="none"/>
-                    <path d="M 160 730 L 300 590" stroke="#16A34A" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 740 L 590 590" stroke="#16A34A" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 750 L 865 520" stroke="#16A34A" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 760 L 865 590" stroke="#16A34A" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 770 L 400 660" stroke="#16A34A" stroke-width="1.6" fill="none"/>
-                    <path d="M 160 780 L 700 660" stroke="#16A34A" stroke-width="1.6" fill="none"/>
+                        <!-- Librarian -> UC Lines -->
+                        <path d="M 160 720 L 485 175" stroke="#15803D" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 730 L 310 515" stroke="#15803D" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 740 L 550 515" stroke="#15803D" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 750 L 310 580" stroke="#15803D" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 760 L 560 580" stroke="#15803D" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 770 L 425 650" stroke="#15803D" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 780 L 680 650" stroke="#15803D" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 790 L 815 515" stroke="#15803D" stroke-width="1.6" fill="none"/>
+                        <path d="M 160 800 L 815 580" stroke="#15803D" stroke-width="1.6" fill="none"/>
 
-                    <!-- ========================================== -->
-                    <!-- CONNECTIONS: ADMIN (RED) -->
-                    <!-- ========================================== -->
-                    <path d="M 1280 500 L 660 165" stroke="#DC2626" stroke-width="1.6" fill="none"/>
-                    <path d="M 1280 520 L 925 165" stroke="#DC2626" stroke-width="1.6" fill="none"/>
-                    <path d="M 1280 540 L 560 800" stroke="#DC2626" stroke-width="1.6" fill="none"/>
-                    <path d="M 1280 550 L 895 800" stroke="#DC2626" stroke-width="1.6" fill="none"/>
-                    <path d="M 1280 560 L 900 875" stroke="#DC2626" stroke-width="1.6" fill="none"/>
-                    <path d="M 1280 570 L 885 875" stroke="#DC2626" stroke-width="1.6" fill="none"/>
-                    <path d="M 1280 580 L 560 875" stroke="#DC2626" stroke-width="1.6" fill="none"/>
-                    <path d="M 1280 590 L 725 950" stroke="#DC2626" stroke-width="1.6" fill="none"/>
-                    <path d="M 1280 600 L 1025 950" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <!-- Admin -> UC Lines -->
+                        <path d="M 1280 500 L 660 175" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <path d="M 1280 510 L 925 175" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <path d="M 1280 520 L 1025 515" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <path d="M 1280 530 L 1025 580" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <path d="M 1280 540 L 545 800" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <path d="M 1280 550 L 865 800" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <path d="M 1280 560 L 905 800" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <path d="M 1280 570 L 545 875" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <path d="M 1280 580 L 855 875" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <path d="M 1280 590 L 905 875" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <path d="M 1280 600 L 705 950" stroke="#DC2626" stroke-width="1.6" fill="none"/>
+                        <path d="M 1280 610 L 1000 950" stroke="#DC2626" stroke-width="1.6" fill="none"/>
 
-                    <!-- EXTEND / INCLUDE DASHED LINES -->
-                    <!-- Issue Book extends Scan Barcode -->
-                    <path d="M 500 570 L 630 540" stroke="#CA8A04" stroke-width="1.8" stroke-dasharray="4 4" fill="none"/>
-                    <text x="575" y="550" font-family="sans-serif" font-size="9" font-style="italic" fill="#854D0E" text-anchor="middle">&laquo;extend&raquo;</text>
+                        <!-- EXTEND / INCLUDE DASHED LINES -->
+                        <path d="M 510 580 L 560 535" stroke="#CA8A04" stroke-width="1.8" stroke-dasharray="4 4" fill="none"/>
+                        <text x="560" y="555" font-family="sans-serif" font-size="9" font-style="italic" fill="#854D0E" text-anchor="middle">&laquo;extend&raquo;</text>
 
-                    <!-- Return Book extends Scan Barcode -->
-                    <path d="M 690 566 L 685 546" stroke="#CA8A04" stroke-width="1.8" stroke-dasharray="4 4" fill="none"/>
-                    <text x="730" y="558" font-family="sans-serif" font-size="9" font-style="italic" fill="#854D0E" text-anchor="middle">&laquo;extend&raquo;</text>
+                        <path d="M 660 556 L 660 539" stroke="#CA8A04" stroke-width="1.8" stroke-dasharray="4 4" fill="none"/>
+                        <text x="690" y="550" font-family="sans-serif" font-size="9" font-style="italic" fill="#854D0E" text-anchor="middle">&laquo;extend&raquo;</text>
 
-                    <!-- Staff Provisioning includes Audit Logs -->
-                    <path d="M 700 824 L 520 860" stroke="#DC2626" stroke-width="1.6" stroke-dasharray="4 4" fill="none"/>
-                    <text x="610" y="850" font-family="sans-serif" font-size="9" font-style="italic" fill="#991B1B" text-anchor="middle">&laquo;include&raquo;</text>
-
-                </svg>
+                        <path d="M 600 800 L 540 855" stroke="#DC2626" stroke-width="1.6" stroke-dasharray="4 4" fill="none"/>
+                        <text x="590" y="835" font-family="sans-serif" font-size="9" font-style="italic" fill="#991B1B" text-anchor="middle">&laquo;include&raquo;</text>
+                    </svg>
+                </div>
             </div>
         </div>
 
@@ -408,210 +447,304 @@
         <div id="panel-erd" class="panel">
             <div class="toolbar">
                 <div class="toolbar-info">
-                    📊 Database Schema: 9 Relational Tables with Full Constraints &amp; Cardinalities
+                    📊 Database Schema: 9 Normalized Relational Tables with Full Constraints &amp; Foreign Keys
                 </div>
                 <div class="btn-group">
+                    <div class="zoom-controls">
+                        <button class="zoom-btn" onclick="zoom('erd', -0.1)" title="Zoom Out">➖</button>
+                        <span id="zoom-label-erd" class="zoom-label">100%</span>
+                        <button class="zoom-btn" onclick="zoom('erd', 0.1)" title="Zoom In">➕</button>
+                        <button class="zoom-btn" onclick="resetZoom('erd')" title="Reset Zoom">🔄 100%</button>
+                        <button class="zoom-btn" onclick="fitWidth('erd')" title="Fit to Screen Width">📐 Fit</button>
+                    </div>
+                    <button onclick="exportSVG('erd-svg', 'ERD_Library_Management_System.svg')" class="action-btn btn-indigo">
+                        📥 Export SVG
+                    </button>
+                    <button onclick="exportPNG('erd-svg', 'ERD_Library_Management_System.png')" class="action-btn btn-success">
+                        🖼️ Export PNG
+                    </button>
                     <a href="ERD_Library_Management_System.drawio" download class="action-btn btn-drawio">
-                        📥 Download ERD (.drawio)
+                        📥 Download .drawio
                     </a>
                     <a href="ERD_Library_Management_System.puml" download class="action-btn btn-secondary">
-                        📥 Download PlantUML (.puml)
+                        📥 PlantUML (.puml)
                     </a>
                     <a href="https://app.diagrams.net/" target="_blank" class="action-btn btn-primary">
                         ✏️ Open in diagrams.net
                     </a>
                 </div>
             </div>
-            <div class="diagram-container">
-                <svg width="1440" height="980" viewBox="0 0 1440 980" xmlns="http://www.w3.org/2000/svg">
-                    <!-- Title -->
-                    <rect x="40" y="20" width="1360" height="40" rx="8" fill="#1E3A8A"/>
-                    <text x="720" y="46" font-family="sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF" text-anchor="middle">
-                        DATABASE ENTITY-RELATIONSHIP SCHEMA (ERD) — 9 NORMALIZED TABLES
-                    </text>
+            <div id="viewport-erd" class="diagram-viewport">
+                <div id="scale-erd" class="svg-scale-wrapper">
+                    <svg id="erd-svg" width="1440" height="980" viewBox="0 0 1440 980" xmlns="http://www.w3.org/2000/svg">
+                        <!-- Title -->
+                        <rect x="40" y="20" width="1360" height="40" rx="8" fill="#1E3A8A"/>
+                        <text x="720" y="46" font-family="sans-serif" font-size="15" font-weight="bold" fill="#FFFFFF" text-anchor="middle">
+                            DATABASE ENTITY-RELATIONSHIP SCHEMA (ERD) — 9 NORMALIZED TABLES
+                        </text>
 
-                    <!-- COURSES TABLE -->
-                    <g transform="translate(40, 90)">
-                        <rect width="210" height="110" rx="8" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
-                        <rect width="210" height="28" rx="8" fill="#2563EB"/>
-                        <rect y="20" width="210" height="8" fill="#2563EB"/>
-                        <text x="105" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">courses</text>
-                        <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#1E40AF">PK id: INT</text>
-                        <text x="12" y="68" font-family="monospace" font-size="11" fill="#334155">UQ course_code: VARCHAR</text>
-                        <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">   course_name: VARCHAR</text>
-                    </g>
+                        <!-- COURSES TABLE -->
+                        <g transform="translate(40, 90)">
+                            <rect width="210" height="110" rx="8" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+                            <rect width="210" height="28" rx="8" fill="#2563EB"/>
+                            <rect y="20" width="210" height="8" fill="#2563EB"/>
+                            <text x="105" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">courses</text>
+                            <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#1E40AF">PK id: INT</text>
+                            <text x="12" y="68" font-family="monospace" font-size="11" fill="#334155">UQ course_code: VARCHAR</text>
+                            <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">   course_name: VARCHAR</text>
+                        </g>
 
-                    <!-- STUDENTS TABLE -->
-                    <g transform="translate(300, 90)">
-                        <rect width="230" height="170" rx="8" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
-                        <rect width="230" height="28" rx="8" fill="#2563EB"/>
-                        <rect y="20" width="230" height="8" fill="#2563EB"/>
-                        <text x="115" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">students</text>
-                        <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#1E40AF">PK id: INT</text>
-                        <text x="12" y="68" font-family="monospace" font-size="11" fill="#334155">   name: VARCHAR(100)</text>
-                        <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">UQ student_number: VARCHAR</text>
-                        <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   gender: VARCHAR(20)</text>
-                        <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">   year_level: INT</text>
-                        <text x="12" y="156" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK course_id: INT</text>
-                    </g>
+                        <!-- STUDENTS TABLE -->
+                        <g transform="translate(300, 90)">
+                            <rect width="230" height="170" rx="8" fill="#FFFFFF" stroke="#2563EB" stroke-width="2"/>
+                            <rect width="230" height="28" rx="8" fill="#2563EB"/>
+                            <rect y="20" width="230" height="8" fill="#2563EB"/>
+                            <text x="115" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">students</text>
+                            <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#1E40AF">PK id: INT</text>
+                            <text x="12" y="68" font-family="monospace" font-size="11" fill="#334155">   name: VARCHAR(100)</text>
+                            <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">UQ student_number: VARCHAR</text>
+                            <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   gender: VARCHAR(20)</text>
+                            <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">   year_level: INT</text>
+                            <text x="12" y="156" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK course_id: INT</text>
+                        </g>
 
-                    <!-- USERS TABLE -->
-                    <g transform="translate(580, 90)">
-                        <rect width="250" height="250" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="2"/>
-                        <rect width="250" height="28" rx="8" fill="#0D9488"/>
-                        <rect y="20" width="250" height="8" fill="#0D9488"/>
-                        <text x="125" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">users</text>
-                        <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#0F766E">PK user_id: INT</text>
-                        <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK student_id: INT (NULL)</text>
-                        <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">UQ username: VARCHAR(50)</text>
-                        <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   full_name: VARCHAR(100)</text>
-                        <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">UQ employee_id: VARCHAR(50)</text>
-                        <text x="12" y="156" font-family="monospace" font-size="11" fill="#334155">UQ email: VARCHAR(100)</text>
-                        <text x="12" y="178" font-family="monospace" font-size="11" fill="#334155">   password_hash: VARCHAR</text>
-                        <text x="12" y="200" font-family="monospace" font-size="11" font-weight="bold" fill="#334155">   role: ENUM(Admin..)</text>
-                        <text x="12" y="222" font-family="monospace" font-size="11" fill="#334155">   is_active: TINYINT(1)</text>
-                        <text x="12" y="242" font-family="monospace" font-size="10" fill="#64748B">   created_at: TIMESTAMP</text>
-                    </g>
+                        <!-- USERS TABLE -->
+                        <g transform="translate(580, 90)">
+                            <rect width="250" height="250" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="2"/>
+                            <rect width="250" height="28" rx="8" fill="#0D9488"/>
+                            <rect y="20" width="250" height="8" fill="#0D9488"/>
+                            <text x="125" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">users</text>
+                            <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#0F766E">PK user_id: INT</text>
+                            <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK student_id: INT (NULL)</text>
+                            <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">UQ username: VARCHAR(50)</text>
+                            <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   full_name: VARCHAR(100)</text>
+                            <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">UQ employee_id: VARCHAR(50)</text>
+                            <text x="12" y="156" font-family="monospace" font-size="11" fill="#334155">UQ email: VARCHAR(100)</text>
+                            <text x="12" y="178" font-family="monospace" font-size="11" fill="#334155">   password_hash: VARCHAR</text>
+                            <text x="12" y="200" font-family="monospace" font-size="11" font-weight="bold" fill="#334155">   role: ENUM(Admin..)</text>
+                            <text x="12" y="222" font-family="monospace" font-size="11" fill="#334155">   is_active: TINYINT(1)</text>
+                            <text x="12" y="242" font-family="monospace" font-size="10" fill="#64748B">   created_at: TIMESTAMP</text>
+                        </g>
 
-                    <!-- CATEGORIES TABLE -->
-                    <g transform="translate(880, 90)">
-                        <rect width="230" height="130" rx="8" fill="#FFFFFF" stroke="#4F46E5" stroke-width="2"/>
-                        <rect width="230" height="28" rx="8" fill="#4F46E5"/>
-                        <rect y="20" width="230" height="8" fill="#4F46E5"/>
-                        <text x="115" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">categories</text>
-                        <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#3730A3">PK category_id: INT</text>
-                        <text x="12" y="68" font-family="monospace" font-size="11" fill="#334155">UQ category_name: VARCHAR</text>
-                        <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">   category_type: ENUM</text>
-                        <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   description: TEXT</text>
-                    </g>
+                        <!-- CATEGORIES TABLE -->
+                        <g transform="translate(880, 90)">
+                            <rect width="230" height="130" rx="8" fill="#FFFFFF" stroke="#4F46E5" stroke-width="2"/>
+                            <rect width="230" height="28" rx="8" fill="#4F46E5"/>
+                            <rect y="20" width="230" height="8" fill="#4F46E5"/>
+                            <text x="115" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">categories</text>
+                            <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#3730A3">PK category_id: INT</text>
+                            <text x="12" y="68" font-family="monospace" font-size="11" fill="#334155">UQ category_name: VARCHAR</text>
+                            <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">   category_type: ENUM</text>
+                            <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   description: TEXT</text>
+                        </g>
 
-                    <!-- BOOKS TABLE -->
-                    <g transform="translate(1160, 90)">
-                        <rect width="240" height="230" rx="8" fill="#FFFFFF" stroke="#4F46E5" stroke-width="2"/>
-                        <rect width="240" height="28" rx="8" fill="#4F46E5"/>
-                        <rect y="20" width="240" height="8" fill="#4F46E5"/>
-                        <text x="120" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">books</text>
-                        <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#3730A3">PK book_id: INT</text>
-                        <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK category_id: INT</text>
-                        <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">UQ isbn: VARCHAR(20)</text>
-                        <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   title: VARCHAR(200)</text>
-                        <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">   author: VARCHAR(150)</text>
-                        <text x="12" y="156" font-family="monospace" font-size="11" fill="#334155">   publisher: VARCHAR</text>
-                        <text x="12" y="178" font-family="monospace" font-size="11" fill="#334155">   publication_year: INT</text>
-                        <text x="12" y="200" font-family="monospace" font-size="11" fill="#334155">   description: TEXT</text>
-                        <text x="12" y="222" font-family="monospace" font-size="10" fill="#64748B">   created_at: TIMESTAMP</text>
-                    </g>
+                        <!-- BOOKS TABLE -->
+                        <g transform="translate(1160, 90)">
+                            <rect width="240" height="230" rx="8" fill="#FFFFFF" stroke="#4F46E5" stroke-width="2"/>
+                            <rect width="240" height="28" rx="8" fill="#4F46E5"/>
+                            <rect y="20" width="240" height="8" fill="#4F46E5"/>
+                            <text x="120" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">books</text>
+                            <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#3730A3">PK book_id: INT</text>
+                            <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK category_id: INT</text>
+                            <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">UQ isbn: VARCHAR(20)</text>
+                            <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   title: VARCHAR(200)</text>
+                            <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">   author: VARCHAR(150)</text>
+                            <text x="12" y="156" font-family="monospace" font-size="11" fill="#334155">   publisher: VARCHAR</text>
+                            <text x="12" y="178" font-family="monospace" font-size="11" fill="#334155">   publication_year: INT</text>
+                            <text x="12" y="200" font-family="monospace" font-size="11" fill="#334155">   description: TEXT</text>
+                            <text x="12" y="222" font-family="monospace" font-size="10" fill="#64748B">   created_at: TIMESTAMP</text>
+                        </g>
 
-                    <!-- BOOK_COPIES TABLE -->
-                    <g transform="translate(1160, 420)">
-                        <rect width="240" height="130" rx="8" fill="#FFFFFF" stroke="#7C3AED" stroke-width="2"/>
-                        <rect width="240" height="28" rx="8" fill="#7C3AED"/>
-                        <rect y="20" width="240" height="8" fill="#7C3AED"/>
-                        <text x="120" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">book_copies</text>
-                        <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#5B21B6">PK copy_id: INT</text>
-                        <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK book_id: INT</text>
-                        <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">UQ barcode: VARCHAR(100)</text>
-                        <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   status: ENUM(Available..)</text>
-                    </g>
+                        <!-- BOOK_COPIES TABLE -->
+                        <g transform="translate(1160, 420)">
+                            <rect width="240" height="130" rx="8" fill="#FFFFFF" stroke="#7C3AED" stroke-width="2"/>
+                            <rect width="240" height="28" rx="8" fill="#7C3AED"/>
+                            <rect y="20" width="240" height="8" fill="#7C3AED"/>
+                            <text x="120" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">book_copies</text>
+                            <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#5B21B6">PK copy_id: INT</text>
+                            <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK book_id: INT</text>
+                            <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">UQ barcode: VARCHAR(100)</text>
+                            <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   status: ENUM(Available..)</text>
+                        </g>
 
-                    <!-- BORROWING_RECORDS TABLE -->
-                    <g transform="translate(680, 520)">
-                        <rect width="260" height="220" rx="8" fill="#FFFFFF" stroke="#BE123C" stroke-width="2"/>
-                        <rect width="260" height="28" rx="8" fill="#BE123C"/>
-                        <rect y="20" width="260" height="8" fill="#BE123C"/>
-                        <text x="130" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">borrowing_records</text>
-                        <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#9F1239">PK borrow_id: INT</text>
-                        <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK user_id: INT</text>
-                        <text x="12" y="90" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK copy_id: INT</text>
-                        <text x="12" y="112" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK issued_by: INT (NULL)</text>
-                        <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">   borrow_date: DATE</text>
-                        <text x="12" y="156" font-family="monospace" font-size="11" fill="#334155">   due_date: DATE</text>
-                        <text x="12" y="178" font-family="monospace" font-size="11" fill="#334155">   return_date: DATE (NULL)</text>
-                        <text x="12" y="200" font-family="monospace" font-size="11" font-weight="bold" fill="#334155">   status: ENUM(Borrowed..)</text>
-                    </g>
+                        <!-- BORROWING_RECORDS TABLE -->
+                        <g transform="translate(680, 520)">
+                            <rect width="260" height="220" rx="8" fill="#FFFFFF" stroke="#BE123C" stroke-width="2"/>
+                            <rect width="260" height="28" rx="8" fill="#BE123C"/>
+                            <rect y="20" width="260" height="8" fill="#BE123C"/>
+                            <text x="130" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">borrowing_records</text>
+                            <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#9F1239">PK borrow_id: INT</text>
+                            <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK user_id: INT</text>
+                            <text x="12" y="90" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK copy_id: INT</text>
+                            <text x="12" y="112" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK issued_by: INT (NULL)</text>
+                            <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">   borrow_date: DATE</text>
+                            <text x="12" y="156" font-family="monospace" font-size="11" fill="#334155">   due_date: DATE</text>
+                            <text x="12" y="178" font-family="monospace" font-size="11" fill="#334155">   return_date: DATE (NULL)</text>
+                            <text x="12" y="200" font-family="monospace" font-size="11" font-weight="bold" fill="#334155">   status: ENUM(Borrowed..)</text>
+                        </g>
 
-                    <!-- RESERVATIONS TABLE -->
-                    <g transform="translate(1080, 680)">
-                        <rect width="240" height="150" rx="8" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
-                        <rect width="240" height="28" rx="8" fill="#D97706"/>
-                        <rect y="20" width="240" height="8" fill="#D97706"/>
-                        <text x="120" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">reservations</text>
-                        <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">PK reservation_id: INT</text>
-                        <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK user_id: INT</text>
-                        <text x="12" y="90" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK book_id: INT</text>
-                        <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   reservation_date: TS</text>
-                        <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">   status: ENUM(Pending..)</text>
-                    </g>
+                        <!-- RESERVATIONS TABLE -->
+                        <g transform="translate(1080, 680)">
+                            <rect width="240" height="150" rx="8" fill="#FFFFFF" stroke="#D97706" stroke-width="2"/>
+                            <rect width="240" height="28" rx="8" fill="#D97706"/>
+                            <rect y="20" width="240" height="8" fill="#D97706"/>
+                            <text x="120" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">reservations</text>
+                            <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">PK reservation_id: INT</text>
+                            <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK user_id: INT</text>
+                            <text x="12" y="90" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK book_id: INT</text>
+                            <text x="12" y="112" font-family="monospace" font-size="11" fill="#334155">   reservation_date: DATE</text>
+                            <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">   status: ENUM(Pending..)</text>
+                        </g>
 
-                    <!-- ACTIVITY_LOGS TABLE -->
-                    <g transform="translate(240, 520)">
-                        <rect width="260" height="200" rx="8" fill="#FFFFFF" stroke="#475569" stroke-width="2"/>
-                        <rect width="260" height="28" rx="8" fill="#475569"/>
-                        <rect y="20" width="260" height="8" fill="#475569"/>
-                        <text x="130" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">activity_logs</text>
-                        <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#334155">PK activity_id: BIGINT</text>
-                        <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK admin_user_id: INT</text>
-                        <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">   admin_username: VARCHAR</text>
-                        <text x="12" y="112" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK target_user_id: INT</text>
-                        <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">   target_username: VARCHAR</text>
-                        <text x="12" y="156" font-family="monospace" font-size="11" fill="#334155">   action: VARCHAR(50)</text>
-                        <text x="12" y="178" font-family="monospace" font-size="11" fill="#334155">   details: TEXT</text>
-                    </g>
+                        <!-- ACTIVITY_LOGS TABLE -->
+                        <g transform="translate(240, 520)">
+                            <rect width="260" height="200" rx="8" fill="#FFFFFF" stroke="#475569" stroke-width="2"/>
+                            <rect width="260" height="28" rx="8" fill="#475569"/>
+                            <rect y="20" width="260" height="8" fill="#475569"/>
+                            <text x="130" y="19" font-family="sans-serif" font-size="12" font-weight="bold" fill="#FFFFFF" text-anchor="middle">activity_logs</text>
+                            <text x="12" y="46" font-family="monospace" font-size="11" font-weight="bold" fill="#334155">PK activity_id: BIGINT</text>
+                            <text x="12" y="68" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK admin_user_id: INT</text>
+                            <text x="12" y="90" font-family="monospace" font-size="11" fill="#334155">   admin_username: VARCHAR</text>
+                            <text x="12" y="112" font-family="monospace" font-size="11" font-weight="bold" fill="#B45309">FK target_user_id: INT</text>
+                            <text x="12" y="134" font-family="monospace" font-size="11" fill="#334155">   target_username: VARCHAR</text>
+                            <text x="12" y="156" font-family="monospace" font-size="11" fill="#334155">   action: VARCHAR(50)</text>
+                            <text x="12" y="178" font-family="monospace" font-size="11" fill="#334155">   details: TEXT</text>
+                        </g>
 
-                    <!-- RELATIONSHIP LINES -->
-                    <!-- courses -> students (1:N) -->
-                    <path d="M 250 145 L 300 145" stroke="#2563EB" stroke-width="2" fill="none"/>
-                    <circle cx="250" cy="145" r="3" fill="#2563EB"/>
+                        <!-- RELATIONSHIP LINES -->
+                        <path d="M 250 145 L 300 145" stroke="#2563EB" stroke-width="2" fill="none"/>
+                        <circle cx="250" cy="145" r="3" fill="#2563EB"/>
 
-                    <!-- students -> users (0..1:1) -->
-                    <path d="M 530 156 L 580 156" stroke="#0D9488" stroke-width="2" fill="none"/>
-                    <circle cx="530" cy="156" r="3" fill="#0D9488"/>
+                        <path d="M 530 156 L 580 156" stroke="#0D9488" stroke-width="2" fill="none"/>
+                        <circle cx="530" cy="156" r="3" fill="#0D9488"/>
 
-                    <!-- categories -> books (1:N) -->
-                    <path d="M 1110 155 L 1160 155" stroke="#4F46E5" stroke-width="2" fill="none"/>
-                    <circle cx="1110" cy="155" r="3" fill="#4F46E5"/>
+                        <path d="M 1110 155 L 1160 155" stroke="#4F46E5" stroke-width="2" fill="none"/>
+                        <circle cx="1110" cy="155" r="3" fill="#4F46E5"/>
 
-                    <!-- books -> book_copies (1:N) -->
-                    <path d="M 1280 320 L 1280 420" stroke="#7C3AED" stroke-width="2" fill="none"/>
-                    <circle cx="1280" cy="320" r="3" fill="#7C3AED"/>
+                        <path d="M 1280 320 L 1280 420" stroke="#7C3AED" stroke-width="2" fill="none"/>
+                        <circle cx="1280" cy="320" r="3" fill="#7C3AED"/>
 
-                    <!-- book_copies -> borrowing_records (1:N) -->
-                    <path d="M 1160 480 L 940 590" stroke="#BE123C" stroke-width="2" fill="none"/>
-                    <circle cx="1160" cy="480" r="3" fill="#BE123C"/>
+                        <path d="M 1160 480 L 940 590" stroke="#BE123C" stroke-width="2" fill="none"/>
+                        <circle cx="1160" cy="480" r="3" fill="#BE123C"/>
 
-                    <!-- users -> borrowing_records (1:N) -->
-                    <path d="M 700 340 L 700 520" stroke="#BE123C" stroke-width="2" fill="none"/>
-                    <circle cx="700" cy="340" r="3" fill="#BE123C"/>
+                        <path d="M 700 340 L 700 520" stroke="#BE123C" stroke-width="2" fill="none"/>
+                        <circle cx="700" cy="340" r="3" fill="#BE123C"/>
 
-                    <!-- users -> activity_logs (1:N) -->
-                    <path d="M 640 340 L 450 520" stroke="#475569" stroke-width="2" fill="none"/>
-                    <circle cx="640" cy="340" r="3" fill="#475569"/>
+                        <path d="M 640 340 L 450 520" stroke="#475569" stroke-width="2" fill="none"/>
+                        <circle cx="640" cy="340" r="3" fill="#475569"/>
 
-                    <!-- books -> reservations (1:N) -->
-                    <path d="M 1280 550 L 1200 680" stroke="#D97706" stroke-width="2" fill="none"/>
-                    <circle cx="1280" cy="550" r="3" fill="#D97706"/>
-                </svg>
+                        <path d="M 1280 550 L 1200 680" stroke="#D97706" stroke-width="2" fill="none"/>
+                        <circle cx="1280" cy="550" r="3" fill="#D97706"/>
+                    </svg>
+                </div>
             </div>
         </div>
     </main>
 
     <footer>
-        <p>School Library Management System (LIBRARY_MS) &copy; 2026. Self-contained, zero-dependency offline SVG viewer.</p>
+        <p>School Library Management System (LIBRARY_MS) &copy; 2026. Self-contained, zero-dependency offline SVG viewer &amp; exporter.</p>
     </footer>
 
     <script>
+        const zoomLevels = { ucd: 1.0, erd: 1.0 };
+
         function switchTab(tabId) {
             document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
             document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
 
             if (tabId === 'erd') {
-                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
                 document.getElementById('panel-erd').classList.add('active');
             } else {
-                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
                 document.getElementById('panel-ucd').classList.add('active');
             }
         }
+
+        function zoom(diagramId, delta) {
+            let next = Math.max(0.3, Math.min(2.5, zoomLevels[diagramId] + delta));
+            zoomLevels[diagramId] = Math.round(next * 10) / 10;
+            applyZoom(diagramId);
+        }
+
+        function resetZoom(diagramId) {
+            zoomLevels[diagramId] = 1.0;
+            applyZoom(diagramId);
+        }
+
+        function fitWidth(diagramId) {
+            const viewport = document.getElementById('viewport-' + diagramId);
+            const svg = document.getElementById(diagramId + '-svg');
+            if (viewport && svg) {
+                const availableWidth = viewport.clientWidth - 48;
+                const naturalWidth = 1440;
+                let scale = availableWidth / naturalWidth;
+                zoomLevels[diagramId] = Math.max(0.3, Math.min(2.0, Math.round(scale * 10) / 10));
+                applyZoom(diagramId);
+            }
+        }
+
+        function applyZoom(diagramId) {
+            const wrapper = document.getElementById('scale-' + diagramId);
+            const label = document.getElementById('zoom-label-' + diagramId);
+            if (wrapper) wrapper.style.transform = `scale(${zoomLevels[diagramId]})`;
+            if (label) label.innerText = Math.round(zoomLevels[diagramId] * 100) + '%';
+        }
+
+        function exportSVG(svgId, filename) {
+            const svg = document.getElementById(svgId);
+            if (!svg) return;
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svg);
+            if (!source.match(/^<svg[^>]+xmlns="http:\/\/www\.w3\.org\/2000\/svg"/)) {
+                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+            const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function exportPNG(svgId, filename) {
+            const svg = document.getElementById(svgId);
+            if (!svg) return;
+            const serializer = new XMLSerializer();
+            const source = serializer.serializeToString(svg);
+            const svgBlob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+            const URL = window.URL || window.webkitURL || window;
+            const blobURL = URL.createObjectURL(svgBlob);
+            const image = new Image();
+            image.onload = function() {
+                const canvas = document.createElement("canvas");
+                const scale = 2; // High-res 2x
+                canvas.width = 1440 * scale;
+                canvas.height = (svgId.includes('ucd') ? 1100 : 980) * scale;
+                const context = canvas.getContext("2d");
+                context.fillStyle = "#FFFFFF";
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.drawImage(image, 0, 0, canvas.width, canvas.height);
+                const pngURL = canvas.toDataURL("image/png");
+                const a = document.createElement("a");
+                a.href = pngURL;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(blobURL);
+            };
+            image.src = blobURL;
+        }
+
+        // Auto-fit to viewport on first load
+        window.addEventListener('DOMContentLoaded', () => {
+            fitWidth('ucd');
+            fitWidth('erd');
+        });
     </script>
 </body>
 </html>
