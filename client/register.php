@@ -6,7 +6,7 @@ startAppSession();
 
 // If already logged in, redirect to index
 if (isLoggedIn()) {
-    header('Location: /');
+    header('Location: index.php');
     exit;
 }
 
@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $db->commit();
 
                 // Redirect to login page with success notification
-                header('Location: /login?registered=1');
+                header('Location: login.php?registered=1');
                 exit;
             }
         } catch (PDOException $e) {

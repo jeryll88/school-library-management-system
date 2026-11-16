@@ -6,23 +6,6 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Route /login → /api/login.php
-RewriteRule ^login/?$ /api/login.php [L]
-
-# Route /register → /api/register.php
-RewriteRule ^register/?$ /api/register.php [L]
-
-# Route /forgot_password → /api/forgot_password.php
-RewriteRule ^forgot_password/?$ /api/forgot_password.php [L]
-
-# Route /logout → /api/logout.php
-RewriteRule ^logout/?$ /api/logout.php [L]
-
-# Route /api/* directly (already real files)
-RewriteRule ^api/(.*)$ /api/$1 [L]
-
-# Route everything else → /api/app.php (main SPA shell)
-RewriteRule ^(.*)$ /api/app.php [L]
 # Clean URL aliases (works in root or any subfolder)
 RewriteRule ^login/?$ login.php [L,QSA]
 RewriteRule ^register/?$ register.php [L,QSA]
