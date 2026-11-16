@@ -189,9 +189,9 @@ SELECT setval('categories_category_id_seq', (SELECT MAX(category_id) FROM catego
 -- Admin: username 'admin', email 'admin@school.edu'
 -- Librarian: username 'librarian', email 'librarian@school.edu'
 INSERT INTO users (user_id, student_id, username, full_name, employee_id, email, password_hash, role, is_active) VALUES
-(1, NULL, 'admin', 'System Administrator', 'EMP-001', 'admin@school.edu', '$2y$10$cLOwKKpuSs2yPkI4.x8w4ObRgYVR702bAuNiF12DvYBBesjYSEJ42', 'Admin', 1),
-(2, NULL, 'librarian', 'Chief Librarian', 'EMP-002', 'librarian@school.edu', '$2y$10$JWhKHRI1DyAflCTELriwFe2rTCqY9BKGe2fuvhZFdzy3dUDqte1kG', 'Librarian', 1)
-ON CONFLICT (user_id) DO NOTHING;
+(1, NULL, 'admin', 'System Administrator', 'EMP-001', 'admin@school.edu', '$2y$10$XPNtktEBi8trLAK/aBo1Oes5yP7NK6isgwVtviNVviAHeeseuQM3G', 'Admin', 1),
+(2, NULL, 'librarian', 'Chief Librarian', 'EMP-002', 'librarian@school.edu', '$2y$10$XPNtktEBi8trLAK/aBo1Oes5yP7NK6isgwVtviNVviAHeeseuQM3G', 'Librarian', 1)
+ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash, is_active = 1;
 
 SELECT setval('users_user_id_seq', (SELECT MAX(user_id) FROM users));
 

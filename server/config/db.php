@@ -65,6 +65,9 @@ function getDB() {
                     PDO::ATTR_PERSISTENT         => true,
                 ]);
             }
+            // Auto-ensure schema & default system users across all environments
+            ensureReservationCopyColumn($pdo);
+            ensureDefaultUsers($pdo);
         } catch (PDOException $e) {
             error_log('Database connection failed: ' . $e->getMessage());
             while (ob_get_level() > 0) {
@@ -103,6 +106,41 @@ if (!function_exists('ensureReservationCopyColumn')) {
             // Ignored if column already exists or table doesn't exist
         }
         $ensured = true;
+    }
+}
+
+if (!function_exists('ensureDefaultUsers')) {
+    function ensureDefaultUsers($db) {
+        static $usersEnsured = false;
+        if ($usersEnsured || !$db) return;
+        try {
+            $defaultHash = '$2y$10$XPNtktEBi8trLAK/aBo1Oes5yP7NK6isgwVtviNVviAHeeseuQM3G'; // password123
+
+            // 1. Ensure Admin exists
+            $adminCheck = $db->prepare("SELECT user_id FROM users WHERE LOWER(username) = 'admin' OR LOWER(email) = 'admin@school.edu' LIMIT 1");
+            $adminCheck->execute();
+            if (!$adminCheck->fetch()) {
+                $ins = $db->prepare("
+                    INSERT INTO users (username, full_name, employee_id, email, password_hash, role, is_active)
+                    VALUES ('admin', 'System Administrator', 'EMP-001', 'admin@school.edu', :hash, 'Admin', 1)
+                ");
+                $ins->execute([':hash' => $defaultHash]);
+            }
+
+            // 2. Ensure Librarian exists
+            $libCheck = $db->prepare("SELECT user_id FROM users WHERE LOWER(username) = 'librarian' OR LOWER(email) = 'librarian@school.edu' LIMIT 1");
+            $libCheck->execute();
+            if (!$libCheck->fetch()) {
+                $ins = $db->prepare("
+                    INSERT INTO users (username, full_name, employee_id, email, password_hash, role, is_active)
+                    VALUES ('librarian', 'Chief Librarian', 'EMP-002', 'librarian@school.edu', :hash, 'Librarian', 1)
+                ");
+                $ins->execute([':hash' => $defaultHash]);
+            }
+        } catch (Throwable $e) {
+            // Silently continue if users table doesn't exist yet
+        }
+        $usersEnsured = true;
     }
 }
 

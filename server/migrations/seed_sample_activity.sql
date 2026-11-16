@@ -11,7 +11,20 @@ ALTER TABLE reservations ADD COLUMN IF NOT EXISTS copy_id INTEGER REFERENCES boo
 ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_status_check;
 ALTER TABLE reservations ADD CONSTRAINT reservations_status_check CHECK (status IN ('Pending', 'Approved', 'Cancelled', 'Fulfilled', 'Rejected'));
 
--- 3. Link sample data to user 'wewe' or first student user
+-- 3. Ensure Admin and Librarian users exist (Password: password123 or admin123 / librarian123)
+INSERT INTO users (username, full_name, employee_id, email, password_hash, role, is_active)
+VALUES 
+    ('admin', 'System Administrator', 'EMP-001', 'admin@school.edu', '$2y$10$XPNtktEBi8trLAK/aBo1Oes5yP7NK6isgwVtviNVviAHeeseuQM3G', 'Admin', 1)
+ON CONFLICT (username) DO UPDATE 
+SET role = 'Admin', is_active = 1, password_hash = '$2y$10$XPNtktEBi8trLAK/aBo1Oes5yP7NK6isgwVtviNVviAHeeseuQM3G';
+
+INSERT INTO users (username, full_name, employee_id, email, password_hash, role, is_active)
+VALUES 
+    ('librarian', 'Chief Librarian', 'EMP-002', 'librarian@school.edu', '$2y$10$XPNtktEBi8trLAK/aBo1Oes5yP7NK6isgwVtviNVviAHeeseuQM3G', 'Librarian', 1)
+ON CONFLICT (username) DO UPDATE 
+SET role = 'Librarian', is_active = 1, password_hash = '$2y$10$XPNtktEBi8trLAK/aBo1Oes5yP7NK6isgwVtviNVviAHeeseuQM3G';
+
+-- 4. Link sample data to user 'wewe' or first student user
 DO $$
 DECLARE
     target_user_id INTEGER;
