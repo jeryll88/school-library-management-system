@@ -14,40 +14,59 @@ function getDB() {
     static $pdo = null;
     if ($pdo === null) {
         try {
-            // Check for Cloud Database URL (Neon / Render / Vercel environment variable)
+            // Check for Cloud Database URL (Neon / Render / Vercel environment variable, with configured Neon default)
+            $defaultNeonUrl = 'postgresql://neondb_owner:npg_QFmBRUa5sJ3E@ep-young-fire-ao3f6pj2-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
             $dbUrl = getenv('DATABASE_URL') 
                   ?: ($_ENV['DATABASE_URL'] 
                   ?? ($_SERVER['DATABASE_URL'] 
                   ?? (getenv('NEON_DATABASE_URL') 
-                  ?: (getenv('DB_URL') ?: null))));
+                  ?: (getenv('DB_URL') ?: $defaultNeonUrl))));
 
             if (!empty($dbUrl)) {
-                // Parse postgresql://user:password@host:port/dbname?sslmode=require
-                $parts = parse_url($dbUrl);
-                $scheme = strtolower($parts['scheme'] ?? 'pgsql');
-                $host   = $parts['host'] ?? 'localhost';
-                $port   = $parts['port'] ?? ($scheme === 'mysql' ? 3306 : 5432);
-                $user   = isset($parts['user']) ? urldecode($parts['user']) : '';
-                $pass   = isset($parts['pass']) ? urldecode($parts['pass']) : '';
-                $name   = isset($parts['path']) ? ltrim($parts['path'], '/') : '';
+                try {
+                    // Parse postgresql://user:password@host:port/dbname?sslmode=require
+                    $parts = parse_url($dbUrl);
+                    $scheme = strtolower($parts['scheme'] ?? 'pgsql');
+                    $host   = $parts['host'] ?? 'localhost';
+                    $port   = $parts['port'] ?? ($scheme === 'mysql' ? 3306 : 5432);
+                    $user   = isset($parts['user']) ? urldecode($parts['user']) : '';
+                    $pass   = isset($parts['pass']) ? urldecode($parts['pass']) : '';
+                    $name   = isset($parts['path']) ? ltrim($parts['path'], '/') : '';
 
-                if ($scheme === 'mysql') {
+                    if ($scheme === 'mysql') {
+                        $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
+                    } else {
+                        // PostgreSQL / Neon
+                        $endpointId = explode('.', $host)[0];
+                        $dsn = "pgsql:host={$host};port={$port};dbname={$name};sslmode=require";
+                        if (strpos($host, 'neon.tech') !== false) {
+                            $dsn .= ";options='endpoint={$endpointId}'";
+                        }
+                    }
+
+                    $pdo = new PDO($dsn, $user, $pass, [
+                        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                        PDO::ATTR_EMULATE_PREPARES   => false,
+                        PDO::ATTR_PERSISTENT         => true,
+                    ]);
+                } catch (Throwable $cloudErr) {
+                    error_log('Primary cloud database connection failed (' . $cloudErr->getMessage() . '). Falling back to local MySQL.');
+                    // Fallback to Local XAMPP MySQL
+                    $host = getenv('DB_HOST') ?: DEFAULT_DB_HOST;
+                    $user = getenv('DB_USER') ?: DEFAULT_DB_USER;
+                    $pass = getenv('DB_PASS') !== false ? getenv('DB_PASS') : DEFAULT_DB_PASS;
+                    $name = getenv('DB_NAME') ?: DEFAULT_DB_NAME;
+                    $port = getenv('DB_PORT') ?: DEFAULT_DB_PORT;
+
                     $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
-                } else {
-                    // PostgreSQL / Neon – strip '-pooler' from host for SNI match,
-                    // and pass explicit endpoint ID for libpq without SNI support
-                    $endpointId = explode('.', $host)[0];
-                    $endpointId = str_replace('-pooler', '', $endpointId);
-                    $host = str_replace('-pooler', '', $host);
-                    $dsn = "pgsql:host={$host};port={$port};dbname={$name};sslmode=require;options='endpoint={$endpointId}'";
+                    $pdo = new PDO($dsn, $user, $pass, [
+                        PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+                        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                        PDO::ATTR_EMULATE_PREPARES   => false,
+                        PDO::ATTR_PERSISTENT         => true,
+                    ]);
                 }
-
-                $pdo = new PDO($dsn, $user, $pass, [
-                    PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                    PDO::ATTR_EMULATE_PREPARES   => false,
-                    PDO::ATTR_PERSISTENT         => true,
-                ]);
             } else {
                 // Local XAMPP MySQL fallback
                 $host = getenv('DB_HOST') ?: DEFAULT_DB_HOST;
