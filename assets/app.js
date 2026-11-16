@@ -323,8 +323,14 @@ function renderStudentDashboard(data) {
                 </div>
                 ${r.reserved_barcode ? `<div class="text-[10px] text-slate-500 font-normal mt-0.5"><i class="fa-solid fa-barcode mr-0.5 text-slate-400"></i>Held Copy: <span class="font-mono text-blue-600 font-semibold">${escapeHtml(r.reserved_barcode)}</span></div>` : ''}
             </td>
-            <td class="text-slate-500">${fmt(r.reservation_date)}</td>
-            <td>${badge(r.status)}</td>
+            <td class="text-slate-500">
+                <div>${fmt(r.reservation_date)}</div>
+                ${r.due_date ? `<div class="text-[11px] text-amber-700 font-semibold mt-0.5"><i class="fa-regular fa-calendar-check mr-1 text-amber-600"></i>Due: ${fmt(r.due_date)}</div>` : ''}
+            </td>
+            <td>
+                ${badge(r.status)}
+                ${r.status === 'Approved' && r.due_date ? `<div class="text-[10px] text-emerald-700 font-semibold mt-0.5">Due: ${fmt(r.due_date)}</div>` : ''}
+            </td>
             <td class="text-center">
                 ${r.status === 'Pending' || r.status === 'Approved' ? `
                     <button onclick="cancelMyReservation(${r.reservation_id})" class="text-xs text-rose-600 hover:text-rose-800 font-semibold px-2 py-0.5 rounded border border-rose-200 hover:bg-rose-50 transition-colors">
@@ -560,7 +566,7 @@ function renderLibrarianDashboard(data) {
             <td>${badge(r.status)}</td>
             <td class="text-center">
                 ${r.status !== 'Returned' ? `
-                    <button onclick="returnBook(${r.borrow_id})" title="Record Book Return" class="inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs px-2.5 py-1 rounded-md border border-emerald-300 transition-colors shadow-2xs cursor-pointer">
+                    <button onclick="returnBook(${r.borrow_id}, ${r.overdue_days || 0}, ${r.fine_amount || 0})" title="Record Book Return" class="inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs px-2.5 py-1 rounded-md border border-emerald-300 transition-colors shadow-2xs cursor-pointer">
                         <i class="fa-solid fa-arrow-rotate-left mr-1 text-[11px]"></i> Return
                     </button>
                 ` : `
@@ -931,8 +937,8 @@ async function cancelMyReservation(reservationId) {
 }
 
 async function updateReservationStatus(reservationId, newStatus) {
-    if (newStatus === 'Fulfilled') {
-        return updateReservation(reservationId, 'Fulfilled');
+    if (newStatus === 'Fulfilled' || newStatus === 'Approved') {
+        return updateReservation(reservationId, newStatus);
     }
     try {
         await api(`api/reservations.php?id=${reservationId}`, 'PUT', { status: newStatus });
@@ -1923,8 +1929,14 @@ async function renderReservations(page = 1, search = '', status = '') {
                 </div>
                 ${r.reserved_barcode ? `<div class="text-[11px] text-slate-500 font-normal mt-0.5"><i class="fa-solid fa-barcode text-slate-400 mr-1"></i>Reserved Copy: <span class="font-mono font-semibold text-blue-600">${escapeHtml(r.reserved_barcode)}</span></div>` : ''}
             </td>
-            <td class="text-slate-500">${fmt(r.reservation_date)}</td>
-            <td>${badge(r.status)}</td>
+            <td class="text-slate-500">
+                <div>${fmt(r.reservation_date)}</div>
+                ${r.due_date ? `<div class="text-[11px] text-amber-700 font-semibold mt-0.5"><i class="fa-regular fa-calendar-check mr-1 text-amber-600"></i>Due: ${fmt(r.due_date)}</div>` : ''}
+            </td>
+            <td>
+                ${badge(r.status)}
+                ${r.status === 'Approved' && r.due_date ? `<div class="text-[10px] text-emerald-700 font-semibold mt-0.5">Due: ${fmt(r.due_date)}</div>` : ''}
+            </td>
             <td class="text-center space-x-1">
                 ${isStudent ? `
                     ${r.status === 'Pending' || r.status === 'Approved' ? `
@@ -1941,7 +1953,7 @@ async function renderReservations(page = 1, search = '', status = '') {
                         <i class="fa-solid fa-xmark"></i> Reject
                     </button>` : ''}
                     ${r.status === 'Approved' ? `
-                    <button onclick="updateReservation(${r.reservation_id},'Fulfilled')" title="Mark as Fulfilled (Borrowed)" class="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs px-2.5 py-1 rounded-md border border-blue-300 transition-colors shadow-2xs">
+                    <button onclick="updateReservation(${r.reservation_id},'Fulfilled', '${r.due_date || ''}')" title="Mark as Fulfilled (Borrowed)" class="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs px-2.5 py-1 rounded-md border border-blue-300 transition-colors shadow-2xs">
                         <i class="fa-solid fa-circle-check"></i> Fulfill
                     </button>
                     <button onclick="updateReservation(${r.reservation_id},'Cancelled')" title="Cancel & Return copy to stock" class="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-2.5 py-1 rounded-md border border-slate-300 transition-colors shadow-2xs">
@@ -2085,11 +2097,55 @@ async function submitAddReservation(e) {
     } catch(err) { toast(err.message, 'error'); }
 }
 
-async function updateReservation(id, status) {
+async function updateReservation(id, status, prefilledDueDate = '') {
+    // When approving, prompt staff to set the due date with clear notice of the late return penalty
+    if (status === 'Approved') {
+        const today = new Date().toISOString().slice(0, 10);
+        const defaultDueDate = prefilledDueDate || new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+        showModal(`
+        <div class="modal-overlay">
+          <div class="modal-box max-w-sm">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 text-base"><i class="fa-solid fa-calendar-check mr-2 text-emerald-600"></i>Approve Reservation</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form class="px-6 py-5 space-y-4" onsubmit="submitApproveReservation(event, ${id})">
+                <div class="bg-emerald-50 border border-emerald-100 text-emerald-800 text-xs p-3.5 rounded-xl space-y-1">
+                    <p class="font-bold flex items-center gap-1.5"><i class="fa-solid fa-circle-check text-emerald-600"></i> Set Return Due Date</p>
+                    <p class="text-slate-600 text-[11px] leading-relaxed">Approving holds a copy of this book for the student and sets their return deadline.</p>
+                </div>
+
+                <div>
+                    <label class="form-label block text-xs font-bold text-slate-700 mb-1">Return Due Date *</label>
+                    <input type="date" name="due_date" required min="${today}" value="${defaultDueDate}" class="form-input w-full text-sm">
+                    <p class="text-[11px] text-slate-400 mt-1">Default return period is 14 days from today.</p>
+                </div>
+
+                <div class="bg-amber-50 border border-amber-200 text-amber-900 text-xs p-3.5 rounded-xl space-y-1.5">
+                    <div class="font-bold flex items-center gap-1.5 text-amber-800 text-xs">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-600"></i> Late Return Penalty Notice
+                    </div>
+                    <div class="text-[11px] text-slate-600 leading-relaxed">
+                        If the student returns this book after the due date, a late penalty of <strong class="text-rose-600 font-mono">₱10.00 / day</strong> will be automatically charged upon return.
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
+                    <button type="submit" class="px-4 py-2 text-sm font-bold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-2xs">
+                        <i class="fa-solid fa-check mr-1.5"></i> Approve & Set Due Date
+                    </button>
+                </div>
+            </form>
+          </div>
+        </div>`);
+        return;
+    }
+
     // When fulfilling, prompt staff to set borrow date and due date
     if (status === 'Fulfilled') {
         const today = new Date().toISOString().slice(0, 10);
-        const dueDate = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+        const dueDate = prefilledDueDate || new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
         showModal(`
         <div class="modal-overlay">
           <div class="modal-box max-w-sm">
@@ -2130,6 +2186,25 @@ async function updateReservation(id, status) {
             toast(`Reservation ${status.toLowerCase()}!`);
         }
         renderReservations();
+    } catch(err) { toast(err.message, 'error'); }
+}
+
+async function submitApproveReservation(e, reservationId) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const dueDate = fd.get('due_date');
+    try {
+        await api(`api/reservations.php?id=${reservationId}`, 'PUT', {
+            status: 'Approved',
+            due_date: dueDate
+        });
+        closeModal();
+        toast('Reservation approved! Return due date set to ' + dueDate + '. Copy reserved. 🎉', 'success');
+        if (State.currentPage === 'dashboard') {
+            renderDashboard();
+        } else {
+            renderReservations();
+        }
     } catch(err) { toast(err.message, 'error'); }
 }
 

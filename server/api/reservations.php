@@ -64,7 +64,7 @@ switch ($method) {
             $total = (int)$countStmt->fetchColumn();
 
             $stmt = $db->prepare("
-                SELECT r.reservation_id, r.reservation_date, r.status, r.copy_id, r.user_id,
+                SELECT r.reservation_id, r.reservation_date, r.due_date, r.status, r.copy_id, r.user_id,
                        bc.barcode AS reserved_barcode,
                        s.name AS student_name, s.student_number, u.full_name, u.username,
                        b.title AS book_title, b.book_id
@@ -95,7 +95,7 @@ switch ($method) {
                 $total = (int)$countStmt->fetchColumn();
 
                 $stmt = $db->prepare("
-                    SELECT r.reservation_id, r.reservation_date, r.status, NULL AS copy_id,
+                    SELECT r.reservation_id, r.reservation_date, NULL AS due_date, r.status, NULL AS copy_id,
                            NULL AS reserved_barcode,
                            u.full_name AS student_name, u.full_name,
                            b.title AS book_title, b.book_id
@@ -258,7 +258,7 @@ switch ($method) {
             }
 
             // Fetch existing reservation details
-            $resStmt = $db->prepare("SELECT reservation_id, book_id, user_id, copy_id, status FROM reservations WHERE reservation_id = :id");
+            $resStmt = $db->prepare("SELECT reservation_id, book_id, user_id, copy_id, status, due_date FROM reservations WHERE reservation_id = :id");
             $resStmt->execute([':id' => $id]);
             $res = $resStmt->fetch();
 
@@ -271,6 +271,8 @@ switch ($method) {
             $existingCopyId  = $res['copy_id'];
 
             if ($newStatus === 'Approved') {
+                $approvedDueDate = !empty($input['due_date']) ? $input['due_date'] : date('Y-m-d', strtotime('+14 days'));
+
                 // Ensure copy is assigned and marked Reserved
                 if (empty($existingCopyId)) {
                     $findCopy = $db->prepare("
@@ -290,8 +292,8 @@ switch ($method) {
                     $db->prepare("UPDATE book_copies SET status = 'Reserved' WHERE copy_id = :copy_id")
                        ->execute([':copy_id' => $existingCopyId]);
                 }
-                $stmt = $db->prepare("UPDATE reservations SET status = 'Approved', copy_id = :copy_id WHERE reservation_id = :id");
-                $stmt->execute([':copy_id' => $existingCopyId, ':id' => $id]);
+                $stmt = $db->prepare("UPDATE reservations SET status = 'Approved', copy_id = :copy_id, due_date = :due_date WHERE reservation_id = :id");
+                $stmt->execute([':copy_id' => $existingCopyId, ':due_date' => $approvedDueDate, ':id' => $id]);
 
             } elseif (in_array($newStatus, ['Cancelled', 'Rejected'], true)) {
                 // If Cancelled or Rejected: release copy back to Available (stock increases by 1)
@@ -368,7 +370,9 @@ switch ($method) {
 
                 $targetUid = (int)$res['user_id'];
                 $borrowDate = !empty($input['borrow_date']) ? $input['borrow_date'] : date('Y-m-d');
-                $dueDate = !empty($input['due_date']) ? $input['due_date'] : date('Y-m-d', strtotime('+14 days'));
+                $dueDate = !empty($input['due_date']) 
+                    ? $input['due_date'] 
+                    : (!empty($res['due_date']) ? $res['due_date'] : date('Y-m-d', strtotime('+14 days')));
 
                 $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
                 if ($driver === 'pgsql') {

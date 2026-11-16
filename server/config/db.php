@@ -92,6 +92,7 @@ if (!function_exists('ensureReservationCopyColumn')) {
             $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
             if ($driver === 'pgsql') {
                 $db->exec("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS copy_id INTEGER REFERENCES book_copies(copy_id) ON DELETE SET NULL");
+                $db->exec("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS due_date DATE NULL");
                 // Ensure check constraint allows Rejected status
                 $db->exec("ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_status_check");
                 $db->exec("ALTER TABLE reservations ADD CONSTRAINT reservations_status_check CHECK (status IN ('Pending', 'Approved', 'Cancelled', 'Fulfilled', 'Rejected'))");
@@ -99,6 +100,10 @@ if (!function_exists('ensureReservationCopyColumn')) {
                 $check = $db->query("SHOW COLUMNS FROM reservations LIKE 'copy_id'")->fetch();
                 if (!$check) {
                     $db->exec("ALTER TABLE reservations ADD COLUMN copy_id INT NULL");
+                }
+                $checkDue = $db->query("SHOW COLUMNS FROM reservations LIKE 'due_date'")->fetch();
+                if (!$checkDue) {
+                    $db->exec("ALTER TABLE reservations ADD COLUMN due_date DATE NULL");
                 }
             }
         } catch (Throwable $e) {
