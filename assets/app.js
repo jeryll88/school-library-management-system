@@ -527,10 +527,14 @@ function renderLibrarianDashboard(data) {
             <td>${badge(r.status)}</td>
             <td class="text-center">
                 ${r.status !== 'Returned' ? `
-                    <button onclick="returnBook(${r.borrow_id})" title="Record Return" class="text-emerald-600 hover:text-emerald-800 font-semibold text-xs px-2 py-0.5 rounded border border-emerald-200 hover:bg-emerald-50">
-                        <i class="fa-solid fa-arrow-rotate-left mr-1"></i> Return
+                    <button onclick="returnBook(${r.borrow_id})" title="Record Book Return" class="inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs px-2.5 py-1 rounded-md border border-emerald-300 transition-colors shadow-2xs cursor-pointer">
+                        <i class="fa-solid fa-arrow-rotate-left mr-1 text-[11px]"></i> Return
                     </button>
-                ` : '<span class="text-emerald-600 text-xs font-semibold"><i class="fa-solid fa-check mr-0.5"></i> Returned</span>'}
+                ` : `
+                    <span class="inline-flex items-center gap-1 text-emerald-600 text-xs font-semibold bg-emerald-50/70 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                        <i class="fa-solid fa-check text-[10px]"></i> Returned
+                    </span>
+                `}
             </td>
         </tr>`).join('') || emptyRow(8, 'No recent borrowing activity');
 
@@ -1524,8 +1528,16 @@ async function renderBorrowing(page = 1, search = '', status = '') {
             <td class="text-slate-400">${r.return_date ? fmt(r.return_date) : '—'}</td>
             <td>${badge(r.status)}</td>
             ${!isStudent ? `
-            <td class="text-center space-x-2">
-                ${r.status !== 'Returned' ? `<button onclick="returnBook(${r.borrow_id})" title="Record Return" class="text-slate-400 hover:text-emerald-600 transition-colors"><i class="fa-solid fa-arrow-rotate-left"></i></button>` : '<span class="text-slate-400 text-xs">—</span>'}
+            <td class="text-center">
+                ${r.status !== 'Returned' ? `
+                    <button onclick="returnBook(${r.borrow_id})" title="Record Book Return" class="inline-flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs px-2.5 py-1 rounded-md border border-emerald-300 transition-colors shadow-2xs cursor-pointer">
+                        <i class="fa-solid fa-arrow-rotate-left text-[11px]"></i> Record Return
+                    </button>
+                ` : `
+                    <span class="inline-flex items-center gap-1 text-emerald-600 text-xs font-semibold bg-emerald-50/70 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                        <i class="fa-solid fa-check text-[10px]"></i> Returned
+                    </span>
+                `}
             </td>` : ''}
         </tr>`).join('') || emptyHtml;
 
@@ -1679,9 +1691,16 @@ async function submitReturn(e, borrowId) {
     const fd = new FormData(e.target);
     try {
         await api(`api/borrowing.php?id=${borrowId}`, 'PUT', { action: 'return', return_date: fd.get('return_date') });
-        closeModal(); toast('Return recorded!', 'success');
-        renderBorrowing();
-    } catch(err) { toast(err.message, 'error'); }
+        closeModal();
+        toast('Book returned successfully! Copy is back in stock. 🎉', 'success');
+        if (State.currentPage === 'dashboard') {
+            renderDashboard();
+        } else {
+            renderBorrowing();
+        }
+    } catch(err) {
+        toast(err.message, 'error');
+    }
 }
 
 // ─── RESERVATIONS ─────────────────────────────────────────────────────────────
