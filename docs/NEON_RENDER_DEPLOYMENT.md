@@ -76,7 +76,18 @@ LIBRARY_MS/
    - **Region:** Select the region closest to your users (e.g., `US East (Ohio)` or `Asia Pacific (Singapore)`).
 4. Click **Create Project**.
 
-### Step 2.2: Execute the Database Schema
+### Step 2.2: Run the Automated Database Seeder or Execute the Schema
+
+You have two convenient options to initialize and seed your Neon database:
+
+#### Method A: 1-Click Automated CLI Seeder (Recommended)
+You can seed your Neon database directly from your command line:
+```bash
+php server/scripts/seed_neon.php "postgresql://neondb_owner:npg_QFmBRUa5sJ3E@ep-young-fire-ao3f6pj2-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+```
+The seeder script will automatically connect via SSL, create all 9 relational tables, generate sequences, and populate all standard courses, categories, initial books, and administrator/librarian accounts.
+
+#### Method B: Neon Web SQL Editor
 1. In your Neon Project Dashboard, click the **SQL Editor** tab on the left sidebar.
 2. Open the file [server/migrations/schema_neon_postgres.sql](file:///c:/Users/Eliza%20Lie%20Corpuz/Documents/4BIT&1BYTE/LIBRARY_MS/server/migrations/schema_neon_postgres.sql).
 3. Copy the entire contents of `schema_neon_postgres.sql`.

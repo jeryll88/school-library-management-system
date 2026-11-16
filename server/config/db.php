@@ -30,8 +30,13 @@ function getDB() {
                 if ($scheme === 'mysql') {
                     $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
                 } else {
-                    // PostgreSQL / Neon
+                    // PostgreSQL / Neon (Include endpoint option for SNI & connection poolers)
+                    $endpointId = explode('.', $host)[0];
+                    $endpointId = str_replace('-pooler', '', $endpointId);
                     $dsn = "pgsql:host={$host};port={$port};dbname={$name};sslmode=require";
+                    if (!empty($endpointId) && strpos($host, 'neon.tech') !== false) {
+                        $dsn .= ";options='endpoint={$endpointId}'";
+                    }
                 }
 
                 $pdo = new PDO($dsn, $user, $pass, [
