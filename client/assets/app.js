@@ -367,12 +367,16 @@ function renderStudentDashboard(data) {
                 </button>
                 ${b.my_reservation_status ? `
                     <span class="text-xs bg-purple-100 text-purple-800 font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 border border-purple-200" title="Reserved under your Student ID (${escapeHtml(window.CURRENT_USER?.student_number || window.CURRENT_USER?.username || '')})">
-                        <i class="fa-solid fa-bookmark text-purple-600"></i> Reserved by You
+                        <i class="fa-solid fa-bookmark text-purple-600"></i> Reserved
                     </span>
-                ` : `
+                ` : isAvail ? `
                     <button onclick="studentReserveBook(${b.book_id}, '${escapeHtml(b.title).replace(/'/g, "\\'")}')" 
                         class="text-xs bg-brand-500 hover:bg-brand-600 text-white font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 shadow-xs">
                         <i class="fa-regular fa-bookmark"></i> Reserve
+                    </button>
+                ` : `
+                    <button disabled class="text-xs bg-slate-100 text-slate-400 font-bold px-3 py-1.5 rounded-lg border border-slate-200 cursor-not-allowed opacity-60 flex items-center gap-1 select-none" title="All copies are currently borrowed. Cannot reserve.">
+                        <i class="fa-solid fa-ban text-[10px]"></i> All Borrowed
                     </button>
                 `}
             </div>
@@ -987,8 +991,8 @@ async function renderBooks(page = 1, search = '', categoryId = '', availOnly = f
         `;
         if (b.my_reservation_status) {
             studentAction += `
-                <span class="inline-flex items-center gap-1 text-[10px] bg-purple-50 text-purple-700 font-bold px-2 py-1 rounded-md border border-purple-200 shadow-2xs" title="Reserved under your name & Student ID">
-                    <i class="fa-solid fa-bookmark text-purple-600"></i> Reserved (${b.my_reservation_status})
+                <span class="inline-flex items-center gap-1 text-[10px] bg-purple-50 text-purple-700 font-bold px-2 py-1 rounded-md border border-purple-200 shadow-2xs" title="Reserved under your Student ID (${escapeHtml(window.CURRENT_USER?.student_number || window.CURRENT_USER?.username || '')})">
+                    <i class="fa-solid fa-bookmark text-purple-600"></i> Reserved
                 </span>
             `;
         } else if (b.my_borrow_status) {
@@ -1002,7 +1006,11 @@ async function renderBooks(page = 1, search = '', categoryId = '', availOnly = f
                 <button onclick="studentReserveBook(${b.book_id},'${b.title.replace(/'/g,"\\'")}')" class="text-[11px] bg-brand-500 hover:bg-brand-600 text-white font-bold px-2.5 py-1 rounded-md shadow-2xs transition-colors"><i class="fa-regular fa-bookmark mr-1"></i> Reserve</button>
             `;
         } else {
-            studentAction += `<span class="text-[11px] text-slate-400 font-medium">All Borrowed</span>`;
+            studentAction += `
+                <button disabled class="text-[11px] bg-slate-100 text-slate-400 font-bold px-2.5 py-1 rounded-md border border-slate-200 cursor-not-allowed opacity-60 select-none" title="All copies of this book are currently borrowed. Cannot reserve.">
+                    <i class="fa-solid fa-ban text-[10px] mr-1"></i> All Borrowed
+                </button>
+            `;
         }
 
         const adminAction = `
@@ -1320,7 +1328,7 @@ async function viewBook(bookId) {
                             <i class="fa-solid fa-bookmark"></i>
                         </div>
                         <div>
-                            <div class="font-bold text-purple-900 text-sm">Reserved Under Your Account</div>
+                            <div class="font-bold text-purple-900 text-sm">Reserved</div>
                             <div class="text-xs text-purple-700 mt-0.5">
                                 Reserved for: <strong>${escapeHtml(window.CURRENT_USER?.full_name || 'You')}</strong> 
                                 • Student ID: <strong class="font-mono text-blue-700">${escapeHtml(window.CURRENT_USER?.student_number || window.CURRENT_USER?.username || '—')}</strong>
@@ -1355,8 +1363,11 @@ async function viewBook(bookId) {
                     </div>
                     ${book.available_copies > 0 ? `
                     <button onclick="closeModal(); studentReserveBook(${bookId}, '${escapeHtml(book.title).replace(/'/g, "\\'")}')" class="text-xs bg-brand-500 hover:bg-brand-600 text-white font-bold px-3.5 py-2 rounded-lg shadow-2xs transition-colors">
-                        <i class="fa-regular fa-bookmark mr-1"></i> Reserve Under My ID
-                    </button>` : ''}
+                        <i class="fa-regular fa-bookmark mr-1"></i> Reserve
+                    </button>` : `
+                    <button disabled class="text-xs bg-slate-100 text-slate-400 font-bold px-3.5 py-2 rounded-lg border border-slate-200 cursor-not-allowed opacity-60 flex items-center gap-1.5 select-none" title="All copies of this book are currently borrowed. Cannot reserve.">
+                        <i class="fa-solid fa-ban text-[10px]"></i> All Copies Borrowed
+                    </button>`}
                 </div>`;
             }
         }
