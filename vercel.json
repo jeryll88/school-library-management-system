@@ -1,18 +1,34 @@
 {
   "version": 2,
   "functions": {
-    "api/**/*.php": {
+    "api/*.php": {
       "runtime": "vercel-php@0.9.0"
     }
   },
   "routes": [
     {
       "src": "/assets/(.*)",
-      "dest": "/client/assets/$1"
+      "dest": "/assets/$1"
     },
     {
       "src": "/client/assets/(.*)",
       "dest": "/client/assets/$1"
+    },
+    {
+      "src": "/login(\\.php)?",
+      "dest": "/api/login.php"
+    },
+    {
+      "src": "/register(\\.php)?",
+      "dest": "/api/register.php"
+    },
+    {
+      "src": "/forgot_password(\\.php)?",
+      "dest": "/api/forgot_password.php"
+    },
+    {
+      "src": "/logout(\\.php)?",
+      "dest": "/api/logout.php"
     },
     {
       "src": "/api/index.php",
@@ -21,22 +37,6 @@
     {
       "src": "/api/(.*)",
       "dest": "/api/$1"
-    },
-    {
-      "src": "/login",
-      "dest": "/api/login.php"
-    },
-    {
-      "src": "/register",
-      "dest": "/api/register.php"
-    },
-    {
-      "src": "/forgot_password",
-      "dest": "/api/forgot_password.php"
-    },
-    {
-      "src": "/logout",
-      "dest": "/api/logout.php"
     },
     {
       "src": "/(.*)",
