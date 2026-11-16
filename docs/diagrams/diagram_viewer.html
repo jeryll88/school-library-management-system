@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Diagram Viewer & Exporter — Library Management System</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #1e40af;
+            --primary-dark: #1e3a8a;
+            --accent: #2563eb;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #0f172a;
+            --border: #e2e8f0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+            color: white;
+            padding: 24px 32px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .header-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .title h1 { font-size: 24px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+        .title p { font-size: 14px; opacity: 0.9; margin-top: 4px; }
+        .tab-nav {
+            display: flex;
+            gap: 8px;
+            background: rgba(255,255,255,0.15);
+            padding: 4px;
+            border-radius: 10px;
+        }
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 8px 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: white;
+            color: var(--primary-dark);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
+        main {
+            flex: 1;
+            max-width: 1400px;
+            width: 100%;
+            margin: 24px auto;
+            padding: 0 24px;
+        }
+        .panel {
+            display: none;
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        .panel.active { display: block; }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: #f1f5f9;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .toolbar-info { font-weight: 700; font-size: 15px; color: #334155; }
+        .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.15s;
+        }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-secondary { background: white; color: #334155; border-color: #cbd5e1; }
+        .btn-secondary:hover { background: #f8fafc; border-color: #94a3b8; }
+        .btn-drawio { background: #ea580c; color: white; }
+        .btn-drawio:hover { background: #c2410c; }
+        .diagram-container {
+            padding: 32px;
+            overflow: auto;
+            min-height: 600px;
+            display: flex;
+            justify-content: center;
+            background: #ffffff;
+        }
+        .mermaid { width: 100%; display: flex; justify-content: center; }
+        footer {
+            text-align: center;
+            padding: 24px;
+            font-size: 13px;
+            color: #64748b;
+            background: #f1f5f9;
+            border-top: 1px solid var(--border);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-container">
+            <div class="title">
+                <h1><i class="fa-solid fa-diagram-project"></i> School Library Management System</h1>
+                <p>Downloadable & Fully Editable Software Architecture Models (ERD & UCD)</p>
+            </div>
+            <div class="tab-nav">
+                <button class="tab-btn active" onclick="switchTab('erd')"><i class="fa-solid fa-database"></i> Entity Relationship Diagram (ERD)</button>
+                <button class="tab-btn" onclick="switchTab('ucd')"><i class="fa-solid fa-users-gear"></i> Use Case Diagram (UCD)</button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- ============================================================= -->
+        <!-- TAB 1: ERD -->
+        <!-- ============================================================= -->
+        <div id="panel-erd" class="panel active">
+            <div class="toolbar">
+                <div class="toolbar-info">
+                    <i class="fa-solid fa-table-cells"></i> Database Schema: 9 Relational Tables with Full Constraints
+                </div>
+                <div class="btn-group">
+                    <a href="ERD_Library_Management_System.drawio" download class="action-btn btn-drawio">
+                        <i class="fa-solid fa-file-pen"></i> Download .drawio (Editable)
+                    </a>
+                    <a href="ERD_Library_Management_System.puml" download class="action-btn btn-secondary">
+                        <i class="fa-solid fa-code"></i> Download PlantUML (.puml)
+                    </a>
+                    <a href="https://app.diagrams.net/" target="_blank" class="action-btn btn-primary">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in diagrams.net
+                    </a>
+                </div>
+            </div>
+            <div class="diagram-container">
+                <div class="mermaid">
+erDiagram
+    COURSES ||--o{ STUDENTS : "enrolls"
+    STUDENTS ||--o| USERS : "links account"
+    CATEGORIES ||--o{ BOOKS : "classifies"
+    BOOKS ||--|{ BOOK_COPIES : "contains inventory"
+    USERS ||--o{ BORROWING_RECORDS : "borrows"
+    BOOK_COPIES ||--o{ BORROWING_RECORDS : "loaned as"
+    USERS ||--o{ BORROWING_RECORDS : "issued by staff"
+    USERS ||--o{ RESERVATIONS : "requests hold"
+    BOOKS ||--o{ RESERVATIONS : "reserved for"
+    USERS ||--o{ ACTIVITY_LOGS : "performed by admin"
+
+    COURSES {
+        int id PK
+        string course_code UK
+        string course_name
+    }
+
+    STUDENTS {
+        int id PK
+        string name
+        string student_number UK
+        string gender
+        int year_level
+        int course_id FK
+    }
+
+    USERS {
+        int user_id PK
+        int student_id FK
+        string username UK
+        string full_name
+        string employee_id UK
+        string email UK
+        string password_hash
+        string role
+        int is_active
+        timestamp created_at
+    }
+
+    CATEGORIES {
+        int category_id PK
+        string category_name UK
+        string category_type
+        string description
+    }
+
+    BOOKS {
+        int book_id PK
+        int category_id FK
+        string isbn UK
+        string title
+        string author
+        string publisher
+        int publication_year
+        string description
+        timestamp created_at
+    }
+
+    BOOK_COPIES {
+        int copy_id PK
+        int book_id FK
+        string barcode UK
+        string status
+    }
+
+    BORROWING_RECORDS {
+        int borrow_id PK
+        int user_id FK
+        int copy_id FK
+        int issued_by FK
+        date borrow_date
+        date due_date
+        date return_date
+        string status
+        timestamp created_at
+    }
+
+    RESERVATIONS {
+        int reservation_id PK
+        int user_id FK
+        int book_id FK
+        timestamp reservation_date
+        string status
+    }
+
+    ACTIVITY_LOGS {
+        bigint activity_id PK
+        int admin_user_id FK
+        string admin_username
+        int target_user_id FK
+        string target_username
+        string action
+        string details
+        timestamp created_at
+    }
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================================= -->
+        <!-- TAB 2: UCD -->
+        <!-- ============================================================= -->
+        <div id="panel-ucd" class="panel">
+            <div class="toolbar">
+                <div class="toolbar-info">
+                    <i class="fa-solid fa-users-viewfinder"></i> Complete Use Case Architecture: 3 Actors & 26 Use Cases
+                </div>
+                <div class="btn-group">
+                    <a href="UCD_Library_Management_System.drawio" download class="action-btn btn-drawio">
+                        <i class="fa-solid fa-file-pen"></i> Download .drawio (Editable)
+                    </a>
+                    <a href="UCD_Library_Management_System.puml" download class="action-btn btn-secondary">
+                        <i class="fa-solid fa-code"></i> Download PlantUML (.puml)
+                    </a>
+                    <a href="https://app.diagrams.net/" target="_blank" class="action-btn btn-primary">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> Open in diagrams.net
+                    </a>
+                </div>
+            </div>
+            <div class="diagram-container">
+                <div class="mermaid">
+graph LR
+    subgraph Actors
+        Student["👤 Student<br/>(Borrower)"]
+        Librarian["📚 Librarian<br/>(Circulation Desk)"]
+        Admin["⚙️ Administrator<br/>(System Admin)"]
+    end
+
+    subgraph SystemBoundary["School Library Management System (LIBRARY_MS)"]
+        subgraph AuthServices["1. Authentication & Security Gateways"]
+            UC01(["UC01: Register Student Account"])
+            UC02(["UC02: Sign In / Authenticate"])
+            UC03(["UC03: Recover Password"])
+            UC04(["UC04: View & Update Profile"])
+            UC05(["&laquo;include&raquo; Verify Identity & Password"])
+        end
+
+        subgraph StudentPortal["2. Student Portal & Catalog Discovery"]
+            UC06(["UC06: View Student Dashboard & Metrics"])
+            UC07(["UC07: Search Catalog & Filter by Category"])
+            UC08(["UC08: View Book Details & Copy Availability"])
+            UC09(["UC09: Submit Book Reservation / Hold"])
+            UC10(["UC10: Track Active Loans & Return Due Dates"])
+        end
+
+        subgraph CirculationDesk["3. Circulation Desk & Inventory Operations"]
+            UC11(["UC11: View Circulation Dashboard"])
+            UC12(["UC12: Scan Hardware Barcode / ISBN"])
+            UC13(["UC13: Add & Edit Book Metadata"])
+            UC14(["UC14: Manage Physical Copies & Statuses"])
+            UC15(["UC15: Issue Book Copy to Student"])
+            UC16(["UC16: Process Book Return"])
+            UC17(["UC17: Monitor Overdue Loans & Penalties"])
+            UC18(["UC18: Process Reservation Queue"])
+        end
+
+        subgraph AdminOps["4. System Administration & Governance"]
+            UC19(["UC19: Executive System Overview & Analytics"])
+            UC20(["UC20: Provision Librarian Accounts (Employee ID)"])
+            UC21(["UC21: Activate / Deactivate Accounts"])
+            UC22(["UC22: Audit Activity Trail & Access Logs"])
+            UC23(["UC23: Manage Student Directory Roster"])
+            UC24(["UC24: Manage Categories & Classifications"])
+            UC25(["UC25: Manage Enrolled Degree Programs"])
+        end
+    end
+
+    %% Student Relationships
+    Student --> UC01
+    Student --> UC02
+    Student --> UC03
+    Student --> UC04
+    Student --> UC06
+    Student --> UC07
+    Student --> UC08
+    Student --> UC09
+    Student --> UC10
+
+    %% Librarian Relationships
+    Librarian --> UC02
+    Librarian --> UC03
+    Librarian --> UC04
+    Librarian --> UC11
+    Librarian --> UC07
+    Librarian --> UC12
+    Librarian --> UC13
+    Librarian --> UC14
+    Librarian --> UC15
+    Librarian --> UC16
+    Librarian --> UC17
+    Librarian --> UC18
+
+    %% Admin Relationships
+    Admin --> UC02
+    Admin --> UC04
+    Admin --> UC19
+    Admin --> UC20
+    Admin --> UC21
+    Admin --> UC22
+    Admin --> UC23
+    Admin --> UC24
+    Admin --> UC25
+    Admin --> UC13
+    Admin --> UC14
+
+    %% Dependencies
+    UC02 -.-> UC05
+    UC01 -.-> UC05
+    UC15 -.->|&laquo;extend&raquo;| UC12
+    UC16 -.->|&laquo;extend&raquo;| UC12
+    UC20 -.->|&laquo;include&raquo;| UC22
+    UC21 -.->|&laquo;include&raquo;| UC22
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>School Library Management System (LIBRARY_MS) &copy; 2026. All diagrams strictly match project source code and live database schemas.</p>
+    </footer>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.remove('active'));
+
+            if (tabId === 'erd') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('panel-erd').classList.add('active');
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('panel-ucd').classList.add('active');
+            }
+        }
+    </script>
+</body>
+</html>

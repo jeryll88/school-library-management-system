@@ -1,0 +1,124 @@
+@startuml UCD_Library_Management_System
+' ====================================================================
+' Use Case Diagram (UCD)
+' Project: School Library Management System (LIBRARY_MS)
+' Tool: PlantUML (Editable & Convertible to Draw.io / SVG / PNG)
+' ====================================================================
+
+!theme plain
+skinparam roundcorner 10
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actor {
+    BackgroundColor #DBEAFE
+    BorderColor #1D4ED8
+    FontSize 13
+}
+skinparam usecase {
+    BackgroundColor #FFFFFF
+    BorderColor #2563EB
+    FontSize 12
+    ArrowColor #2563EB
+}
+
+left to right direction
+
+actor "Student\n(Borrower)" as Student
+actor "Librarian\n(Circulation Desk)" as Librarian
+actor "Administrator\n(System Admin)" as Admin
+
+rectangle "School Library Management System (LIBRARY_MS)" {
+
+    ' Authentication & Public Gateways
+    package "Authentication & Account Services" {
+        usecase "UC01: Register Student Account" as UC_Register
+        usecase "UC02: Sign In / Authenticate" as UC_Login
+        usecase "UC03: Recover Password" as UC_Forgot
+        usecase "UC04: View & Update Profile" as UC_Profile
+        usecase "UC05: Verify Identity / Credentials" as UC_VerifyAuth
+        usecase "UC06: Check Role Permissions" as UC_CheckRole
+    }
+
+    ' Student Portal & Discovery
+    package "Student Portal & Catalog Discovery" {
+        usecase "UC07: View Student Dashboard" as UC_StuDash
+        usecase "UC08: Search Catalog & Filter by Category" as UC_SearchCatalog
+        usecase "UC09: View Book Details & Copy Availability" as UC_ViewBook
+        usecase "UC10: Submit Book Reservation / Hold" as UC_ReserveBook
+        usecase "UC11: Track Personal Borrowing & Due Dates" as UC_TrackBorrow
+    }
+
+    ' Circulation & Inventory Management
+    package "Circulation Desk & Inventory Operations" {
+        usecase "UC12: View Circulation Dashboard" as UC_LibDash
+        usecase "UC13: Scan Hardware Barcode / ISBN" as UC_ScanBarcode
+        usecase "UC14: Add & Edit Book Metadata" as UC_ManageBooks
+        usecase "UC15: Manage Physical Copies & Statuses" as UC_ManageCopies
+        usecase "UC16: Issue Book Copy to Student" as UC_IssueBook
+        usecase "UC17: Process Book Return" as UC_ReturnBook
+        usecase "UC18: Monitor Overdue Loans & Penalties" as UC_MonitorOverdue
+        usecase "UC19: Manage Reservation Queue" as UC_ManageReservations
+    }
+
+    ' System Administration & Governance
+    package "System Administration & Governance" {
+        usecase "UC20: View Executive System Analytics" as UC_AdminDash
+        usecase "UC21: Provision Librarian Accounts (Employee ID)" as UC_ProvisionStaff
+        usecase "UC22: Activate / Deactivate Accounts" as UC_ToggleActive
+        usecase "UC23: Audit Activity Trail & Access Logs" as UC_AuditLogs
+        usecase "UC24: Manage Student Directory Roster" as UC_ManageStudents
+        usecase "UC25: Manage Book Categories & Classifications" as UC_ManageCategories
+        usecase "UC26: Manage Enrolled Degree Programs" as UC_ManageCourses
+    }
+}
+
+' Relationships: Student
+Student --> UC_Register
+Student --> UC_Login
+Student --> UC_Forgot
+Student --> UC_Profile
+Student --> UC_StuDash
+Student --> UC_SearchCatalog
+Student --> UC_ViewBook
+Student --> UC_ReserveBook
+Student --> UC_TrackBorrow
+
+' Relationships: Librarian
+Librarian --> UC_Login
+Librarian --> UC_Forgot
+Librarian --> UC_Profile
+Librarian --> UC_LibDash
+Librarian --> UC_SearchCatalog
+Librarian --> UC_ScanBarcode
+Librarian --> UC_ManageBooks
+Librarian --> UC_ManageCopies
+Librarian --> UC_IssueBook
+Librarian --> UC_ReturnBook
+Librarian --> UC_MonitorOverdue
+Librarian --> UC_ManageReservations
+
+' Relationships: Admin
+Admin --> UC_Login
+Admin --> UC_Profile
+Admin --> UC_AdminDash
+Admin --> UC_ProvisionStaff
+Admin --> UC_ToggleActive
+Admin --> UC_AuditLogs
+Admin --> UC_ManageStudents
+Admin --> UC_ManageCategories
+Admin --> UC_ManageCourses
+Admin --> UC_ManageBooks
+Admin --> UC_ManageCopies
+
+' Includes & Extends
+UC_Login ..> UC_VerifyAuth : <<include>>
+UC_Login ..> UC_CheckRole : <<include>>
+UC_Register ..> UC_VerifyAuth : <<include>>
+UC_Forgot ..> UC_VerifyAuth : <<include>>
+UC_IssueBook ..> UC_ScanBarcode : <<extend>>
+UC_ReturnBook ..> UC_ScanBarcode : <<extend>>
+UC_ManageCopies ..> UC_ScanBarcode : <<extend>>
+UC_ProvisionStaff ..> UC_AuditLogs : <<include>>
+UC_ToggleActive ..> UC_AuditLogs : <<include>>
+
+@enduml

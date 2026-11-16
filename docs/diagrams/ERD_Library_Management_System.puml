@@ -1,0 +1,128 @@
+@startuml ERD_Library_Management_System
+' ====================================================================
+' Entity-Relationship Diagram (ERD)
+' Project: School Library Management System (LIBRARY_MS)
+' Tool: PlantUML (Editable & Convertible to Draw.io / SVG / PNG)
+' ====================================================================
+
+!theme plain
+skinparam roundcorner 8
+skinparam linetype ortho
+skinparam shadowing false
+skinparam class {
+    BackgroundColor #FFFFFF
+    BorderColor #2563EB
+    HeaderBackgroundColor #1E3A8A
+    FontColor #FFFFFF
+    FontSize 12
+    AttributeFontSize 11
+}
+
+entity "courses" as courses {
+    * id : INT <<PK, AI>>
+    --
+    * course_code : VARCHAR(20) <<UNIQUE>>
+    * course_name : VARCHAR(100)
+}
+
+entity "students" as students {
+    * id : INT <<PK, AI>>
+    --
+    * name : VARCHAR(100)
+    * student_number : VARCHAR(50) <<UNIQUE>>
+    * gender : VARCHAR(20)
+    * year_level : INT
+    * course_id : INT <<FK>>
+}
+
+entity "users" as users {
+    * user_id : INT <<PK, AI>>
+    --
+    student_id : INT <<FK, NULL>>
+    * username : VARCHAR(50) <<UNIQUE>>
+    * full_name : VARCHAR(100)
+    employee_id : VARCHAR(50) <<UNIQUE, NULL>>
+    * email : VARCHAR(100) <<UNIQUE>>
+    * password_hash : VARCHAR(255)
+    * role : ENUM('Admin','Librarian','User')
+    * is_active : TINYINT [default 1]
+    * created_at : TIMESTAMP
+}
+
+entity "categories" as categories {
+    * category_id : INT <<PK, AI>>
+    --
+    * category_name : VARCHAR(100) <<UNIQUE>>
+    * category_type : ENUM('Academic','Non-Academic')
+    description : TEXT
+}
+
+entity "books" as books {
+    * book_id : INT <<PK, AI>>
+    --
+    category_id : INT <<FK, NULL>>
+    * isbn : VARCHAR(20) <<UNIQUE>>
+    * title : VARCHAR(200)
+    * author : VARCHAR(150)
+    publisher : VARCHAR(150)
+    publication_year : INT
+    description : TEXT
+    * created_at : TIMESTAMP
+}
+
+entity "book_copies" as book_copies {
+    * copy_id : INT <<PK, AI>>
+    --
+    * book_id : INT <<FK>>
+    * barcode : VARCHAR(100) <<UNIQUE>>
+    * status : ENUM('Available','Borrowed','Reserved','Lost','Damaged')
+}
+
+entity "borrowing_records" as borrowing_records {
+    * borrow_id : INT <<PK, AI>>
+    --
+    * user_id : INT <<FK>>
+    * copy_id : INT <<FK>>
+    issued_by : INT <<FK, NULL>>
+    * borrow_date : DATE
+    * due_date : DATE
+    return_date : DATE <<NULL>>
+    * status : ENUM('Borrowed','Returned','Overdue')
+    * created_at : TIMESTAMP
+}
+
+entity "reservations" as reservations {
+    * reservation_id : INT <<PK, AI>>
+    --
+    * user_id : INT <<FK>>
+    * book_id : INT <<FK>>
+    * reservation_date : TIMESTAMP
+    * status : ENUM('Pending','Approved','Cancelled','Fulfilled')
+}
+
+entity "activity_logs" as activity_logs {
+    * activity_id : BIGINT <<PK, AI>>
+    --
+    * admin_user_id : INT <<FK>>
+    * admin_username : VARCHAR(100)
+    * target_user_id : INT <<FK>>
+    * target_username : VARCHAR(100)
+    * action : VARCHAR(50)
+    * details : TEXT
+    * created_at : TIMESTAMP
+}
+
+' Relationships & Cardinalities
+courses ||--o{ students : "enrolls (1:N)"
+students ||--o| users : "links account (0..1:1)"
+categories ||--o{ books : "classifies (1:N)"
+books ||--|{ book_copies : "contains inventory (1:N)"
+users ||--o{ borrowing_records : "borrows (1:N)"
+book_copies ||--o{ borrowing_records : "loaned as (1:N)"
+users ||--o{ borrowing_records : "issues loan (staff) (0..1:N)"
+users ||--o{ reservations : "places hold (1:N)"
+books ||--o{ reservations : "reserved for (1:N)"
+users ||--o{ activity_logs : "performed by (admin) (1:N)"
+users ||--o{ activity_logs : "targets user (1:N)"
+
+@enduml
