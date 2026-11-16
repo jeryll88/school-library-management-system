@@ -67,7 +67,8 @@ async function api(url, method = 'GET', body = null) {
         data = JSON.parse(text);
     } catch (e) {
         console.error('Non-JSON API response from:', resolvedUrl, text.substring(0, 500));
-        throw new Error('Server returned an unexpected response. Check console for details.');
+        const snippet = text.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').trim().substring(0, 120);
+        throw new Error(snippet ? `Server error: ${snippet}` : 'Server returned an invalid response.');
     }
     if (!res.ok) throw new Error(data.error || 'API error');
     return data;

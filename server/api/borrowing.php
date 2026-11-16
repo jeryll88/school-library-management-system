@@ -75,7 +75,7 @@ switch ($method) {
             JOIN book_copies bc ON br.copy_id = bc.copy_id
             JOIN books b ON bc.book_id = b.book_id
             $whereSQL
-            ORDER BY br.created_at DESC
+            ORDER BY br.borrow_id DESC
             LIMIT :limit OFFSET :offset
         ");
         foreach ($params as $k => $v) $stmt->bindValue($k, $v);

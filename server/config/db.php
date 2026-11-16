@@ -63,18 +63,42 @@ function getDB() {
                     PDO::ATTR_EMULATE_PREPARES   => false,
                 ]);
             }
+            // Auto-ensure copy_id exists on reservations table across all environments
+            ensureReservationCopyColumn($pdo);
         } catch (PDOException $e) {
             error_log('Database connection failed: ' . $e->getMessage());
+            while (ob_get_level() > 0) {
+                @ob_end_clean();
+            }
             http_response_code(500);
-            header('Content-Type: application/json');
+            header('Content-Type: application/json; charset=utf-8');
             echo json_encode([
-                'error' => 'Database connection failed',
-                'details' => (getenv('APP_ENV') === 'development' || !empty($_GET['debug'])) ? $e->getMessage() : 'Please check your database configuration.'
-            ]);
+                'error' => 'Database connection failed: ' . $e->getMessage(),
+                'details' => 'Please check your database configuration.'
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
             exit;
         }
     }
     return $pdo;
+}
+
+function ensureReservationCopyColumn($db) {
+    static $ensured = false;
+    if ($ensured || !$db) return;
+    try {
+        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $db->exec("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS copy_id INTEGER REFERENCES book_copies(copy_id) ON DELETE SET NULL");
+        } else {
+            $check = $db->query("SHOW COLUMNS FROM reservations LIKE 'copy_id'")->fetch();
+            if (!$check) {
+                $db->exec("ALTER TABLE reservations ADD COLUMN copy_id INT NULL");
+            }
+        }
+    } catch (Throwable $e) {
+        // Ignored if column already exists or table doesn't exist
+    }
+    $ensured = true;
 }
 
 function getDbDriver() {
@@ -82,10 +106,29 @@ function getDbDriver() {
 }
 
 function jsonResponse($data, $code = 200) {
+    while (ob_get_level() > 0) {
+        @ob_end_clean();
+    }
     http_response_code($code);
-    header('Content-Type: application/json');
-    echo json_encode($data);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
+}
+
+if (!defined('GLOBAL_EXCEPTION_HANDLER_SET')) {
+    define('GLOBAL_EXCEPTION_HANDLER_SET', true);
+    set_exception_handler(function (Throwable $e) {
+        while (ob_get_level() > 0) {
+            @ob_end_clean();
+        }
+        http_response_code(500);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode([
+            'error' => $e->getMessage(),
+            'code'  => $e->getCode(),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        exit;
+    });
 }
 
 function getInput() {
