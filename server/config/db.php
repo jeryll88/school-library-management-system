@@ -34,10 +34,10 @@ function getDB() {
                 if ($scheme === 'mysql') {
                     $dsn = "mysql:host={$host};port={$port};dbname={$name};charset=utf8mb4";
                 } else {
-                    // PostgreSQL / Neon (Include endpoint option for SNI & connection poolers)
+                    // PostgreSQL / Neon (include endpoint option for SNI)
                     $endpointId = explode('.', $host)[0];
                     $endpointId = str_replace('-pooler', '', $endpointId);
-                    $dsn = "pgsql:host={$host};port={$port};dbname={$name};sslmode=require";
+                    $dsn = "pgsql:host={$host};port={$port};dbname={$name};sslmode=require;options='endpoint={$endpointId}'";
                 }
 
                 $pdo = new PDO($dsn, $user, $pass, [
