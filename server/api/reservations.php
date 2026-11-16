@@ -102,6 +102,24 @@ switch ($method) {
             jsonResponse(['error' => 'You already have an active reservation for this book.'], 400);
         }
 
+        // Verify book exists and has available copies before allowing reservation
+        $bookCheck = $db->prepare("
+            SELECT b.book_id, b.title,
+                   COALESCE(SUM(CASE WHEN bc.status = 'Available' THEN 1 ELSE 0 END), 0) AS available_copies
+            FROM books b
+            LEFT JOIN book_copies bc ON bc.book_id = b.book_id
+            WHERE b.book_id = :book_id
+            GROUP BY b.book_id, b.title
+        ");
+        $bookCheck->execute([':book_id' => $input['book_id']]);
+        $bookRow = $bookCheck->fetch();
+        if (!$bookRow) {
+            jsonResponse(['error' => 'Selected book does not exist in catalog'], 404);
+        }
+        if ((int)$bookRow['available_copies'] <= 0) {
+            jsonResponse(['error' => 'All copies of "' . $bookRow['title'] . '" are currently borrowed or reserved. No copies available to reserve.'], 400);
+        }
+
         $stmt = $db->prepare("INSERT INTO reservations (user_id, book_id, status) VALUES (:user, :book, 'Pending')");
         $stmt->execute([':user' => $targetUser, ':book' => $input['book_id']]);
         jsonResponse(['success' => true, 'reservation_id' => $db->lastInsertId()], 201);
@@ -135,7 +153,7 @@ switch ($method) {
             $stmt = $db->prepare("UPDATE reservations SET status = 'Cancelled', copy_id = NULL WHERE reservation_id = :id");
             $stmt->execute([':id' => $id]);
         } else {
-            $allowedStatuses = ['Pending', 'Approved', 'Cancelled', 'Fulfilled'];
+            $allowedStatuses = ['Pending', 'Approved', 'Cancelled', 'Fulfilled', 'Rejected'];
             $newStatus = $input['status'] ?? '';
             if (!in_array($newStatus, $allowedStatuses, true)) {
                 jsonResponse(['error' => 'Valid reservation status is required'], 422);
@@ -170,7 +188,7 @@ switch ($method) {
 
                 $reservedCopyId = (int)$copyRow['copy_id'];
 
-                // Deduct book stock by marking this physical copy as 'Reserved'
+                // Deduct book stock by marking this physical copy as 'Reserved' (stock decreases by 1)
                 $db->prepare("UPDATE book_copies SET status = 'Reserved' WHERE copy_id = :copy_id")
                    ->execute([':copy_id' => $reservedCopyId]);
 
@@ -178,8 +196,8 @@ switch ($method) {
                 $stmt = $db->prepare("UPDATE reservations SET status = 'Approved', copy_id = :copy_id WHERE reservation_id = :id");
                 $stmt->execute([':copy_id' => $reservedCopyId, ':id' => $id]);
 
-            } elseif ($oldStatus === 'Approved' && in_array($newStatus, ['Cancelled', 'Pending'], true)) {
-                // If previously Approved and now Cancelled or Pending: release copy back to Available (stock increases)
+            } elseif ($oldStatus === 'Approved' && in_array($newStatus, ['Cancelled', 'Pending', 'Rejected'], true)) {
+                // If previously Approved and now Cancelled, Rejected, or Pending: release copy back to Available (stock increases by 1)
                 if (!empty($existingCopyId)) {
                     $db->prepare("UPDATE book_copies SET status = 'Available' WHERE copy_id = :copy_id AND status = 'Reserved'")
                        ->execute([':copy_id' => $existingCopyId]);
@@ -188,7 +206,7 @@ switch ($method) {
                 $stmt->execute([':status' => $newStatus, ':id' => $id]);
 
             } else {
-                // Other status updates (e.g. Fulfilled)
+                // Other status updates (e.g. Fulfilled, or Pending -> Rejected)
                 $stmt = $db->prepare("UPDATE reservations SET status = :status WHERE reservation_id = :id");
                 $stmt->execute([':status' => $newStatus, ':id' => $id]);
             }

@@ -24,7 +24,7 @@ function badge(status) {
         'Available': 'available', 'Borrowed': 'borrowed', 'Reserved': 'reserved',
         'Lost': 'lost', 'Damaged': 'damaged',
         'Active': 'active', 'Inactive': 'inactive', 'Returned': 'returned', 'Overdue': 'overdue',
-        'Pending': 'pending', 'Approved': 'approved', 'Cancelled': 'cancelled',
+        'Pending': 'pending', 'Approved': 'approved', 'Cancelled': 'cancelled', 'Rejected': 'cancelled',
         'Fulfilled': 'fulfilled', 'Checked Out': 'checkedout',
         'User': 'active', 'Librarian': 'returned', 'Admin': 'reserved',
     };
@@ -541,11 +541,11 @@ function renderLibrarianDashboard(data) {
             <td class="text-slate-500">${fmt(r.reservation_date)}</td>
             <td><span class="badge badge-pending">Pending</span></td>
             <td class="text-center space-x-1">
-                <button onclick="updateReservationStatus(${r.reservation_id}, 'Approved')" title="Approve" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] px-2 py-0.5 rounded border border-emerald-200">
-                    Approve
+                <button onclick="updateReservationStatus(${r.reservation_id}, 'Approved')" title="Approve Reservation (Decreases Available Stock by 1)" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] px-2.5 py-1 rounded border border-emerald-300 shadow-2xs">
+                    <i class="fa-solid fa-check mr-0.5"></i> Approve
                 </button>
-                <button onclick="updateReservationStatus(${r.reservation_id}, 'Cancelled')" title="Cancel" class="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[10px] px-2 py-0.5 rounded border border-rose-200">
-                    Cancel
+                <button onclick="updateReservationStatus(${r.reservation_id}, 'Rejected')" title="Reject Reservation" class="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[10px] px-2.5 py-1 rounded border border-rose-300 shadow-2xs">
+                    <i class="fa-solid fa-xmark mr-0.5"></i> Reject
                 </button>
             </td>
         </tr>`).join('') || emptyRow(6, 'No pending reservations awaiting approval.');
@@ -890,7 +890,13 @@ async function cancelMyReservation(reservationId) {
 async function updateReservationStatus(reservationId, newStatus) {
     try {
         await api(`api/reservations.php?id=${reservationId}`, 'PUT', { status: newStatus });
-        toast(`Reservation marked as ${newStatus}.`);
+        if (newStatus === 'Approved') {
+            toast('Reservation approved! Book stock decreased by 1.', 'success');
+        } else if (newStatus === 'Rejected') {
+            toast('Reservation rejected.', 'info');
+        } else {
+            toast(`Reservation marked as ${newStatus}.`);
+        }
         if (State.currentPage === 'dashboard') renderDashboard();
         else renderReservations();
     } catch(err) {
@@ -1665,17 +1671,25 @@ async function renderReservations(page = 1, search = '', status = '') {
                     ` : '<span class="text-slate-400 text-xs">—</span>'}
                 ` : `
                     ${r.status === 'Pending' ? `
-                    <button onclick="updateReservation(${r.reservation_id},'Approved')" title="Approve & Reserve Stock" class="text-slate-400 hover:text-emerald-600 transition-colors"><i class="fa-solid fa-check"></i></button>
-                    <button onclick="updateReservation(${r.reservation_id},'Cancelled')" title="Cancel" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark"></i></button>` : ''}
+                    <button onclick="updateReservation(${r.reservation_id},'Approved')" title="Approve & Deduct 1 from stock" class="inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs px-2.5 py-1 rounded-md border border-emerald-300 transition-colors shadow-2xs">
+                        <i class="fa-solid fa-check"></i> Approve
+                    </button>
+                    <button onclick="updateReservation(${r.reservation_id},'Rejected')" title="Reject Reservation" class="inline-flex items-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs px-2.5 py-1 rounded-md border border-rose-300 transition-colors shadow-2xs">
+                        <i class="fa-solid fa-xmark"></i> Reject
+                    </button>` : ''}
                     ${r.status === 'Approved' ? `
-                    <button onclick="updateReservation(${r.reservation_id},'Fulfilled')" title="Fulfilled" class="text-slate-400 hover:text-blue-600 transition-colors"><i class="fa-solid fa-circle-check"></i></button>
-                    <button onclick="updateReservation(${r.reservation_id},'Cancelled')" title="Cancel & Return Stock" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark"></i></button>` : ''}
-                    <button onclick="deleteReservation(${r.reservation_id})" title="Delete" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-regular fa-trash-can text-xs"></i></button>
+                    <button onclick="updateReservation(${r.reservation_id},'Fulfilled')" title="Mark as Fulfilled (Borrowed)" class="inline-flex items-center gap-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs px-2.5 py-1 rounded-md border border-blue-300 transition-colors shadow-2xs">
+                        <i class="fa-solid fa-circle-check"></i> Fulfill
+                    </button>
+                    <button onclick="updateReservation(${r.reservation_id},'Cancelled')" title="Cancel & Return copy to stock" class="inline-flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-2.5 py-1 rounded-md border border-slate-300 transition-colors shadow-2xs">
+                        <i class="fa-solid fa-arrow-rotate-left"></i> Cancel
+                    </button>` : ''}
+                    <button onclick="deleteReservation(${r.reservation_id})" title="Delete Record" class="text-slate-400 hover:text-rose-500 p-1 transition-colors"><i class="fa-regular fa-trash-can text-xs"></i></button>
                 `}
             </td>
         </tr>`).join('') || emptyRow(isStudent ? 5 : 6, isStudent ? 'You have no reservations on file.' : 'No reservations found');
 
-    const statusOptions = ['', 'Pending', 'Approved', 'Cancelled', 'Fulfilled'].map(s =>
+    const statusOptions = ['', 'Pending', 'Approved', 'Rejected', 'Cancelled', 'Fulfilled'].map(s =>
         `<option value="${s}" ${s === status ? 'selected' : ''}>${s || 'All Statuses'}</option>`).join('');
 
     const pagination = buildPagination(data.total, data.page, data.limit,
@@ -1809,7 +1823,15 @@ async function submitAddReservation(e) {
 async function updateReservation(id, status) {
     try {
         await api(`api/reservations.php?id=${id}`, 'PUT', { status });
-        toast(`Reservation ${status.toLowerCase()}!`);
+        if (status === 'Approved') {
+            toast('Reservation approved! Book stock decreased by 1.', 'success');
+        } else if (status === 'Rejected') {
+            toast('Reservation rejected.', 'info');
+        } else if (status === 'Cancelled') {
+            toast('Reservation cancelled. Reserved copy returned to stock.');
+        } else {
+            toast(`Reservation ${status.toLowerCase()}!`);
+        }
         renderReservations();
     } catch(err) { toast(err.message, 'error'); }
 }
