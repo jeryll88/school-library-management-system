@@ -126,3 +126,4 @@ users ||--o{ activity_logs : "performed by (admin) (1:N)"
 users ||--o{ activity_logs : "targets user (1:N)"
 
 @enduml
+
