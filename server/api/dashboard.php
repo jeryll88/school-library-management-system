@@ -12,56 +12,49 @@ try {
     $userId   = $account['user_id'];
     $userRole = $account['role'];
 
+    // Update overdue records at most once every 5 minutes to avoid locking on every page view
     if (in_array($userRole, ['Admin', 'Librarian'], true)) {
-        try {
-            $db->query("UPDATE borrowing_records SET status='Overdue' WHERE status='Borrowed' AND due_date < CURRENT_DATE");
-        } catch (Throwable $e) {}
+        if (empty($_SESSION['overdue_checked_at']) || (time() - $_SESSION['overdue_checked_at'] > 300)) {
+            try {
+                $db->exec("UPDATE borrowing_records SET status='Overdue' WHERE status='Borrowed' AND due_date < CURRENT_DATE");
+                $_SESSION['overdue_checked_at'] = time();
+            } catch (Throwable $e) {}
+        }
     }
 
     if ($userRole === 'User') {
         // ═════════════════════════════════════════════════════════════════════
-        // STUDENT DASHBOARD DATA
+        // STUDENT DASHBOARD DATA (Optimized: Combined Queries)
         // ═════════════════════════════════════════════════════════════════════
         $borrowedCount = 0;
         $overdueCount  = 0;
         $reserveCount  = 0;
         $returnedCount = 0;
+        $dueSoonCount  = 0;
         $myBorrowings  = [];
         $myReservations = [];
 
         if ($userId) {
-            $stmt = $db->prepare("SELECT COUNT(*) FROM borrowing_records WHERE user_id = :uid AND status = 'Borrowed'");
+            // Combined borrowing counts into a single fast query
+            $stmt = $db->prepare("
+                SELECT 
+                    COUNT(CASE WHEN status = 'Borrowed' THEN 1 END) AS borrowed_count,
+                    COUNT(CASE WHEN status = 'Overdue' THEN 1 END) AS overdue_count,
+                    COUNT(CASE WHEN status = 'Returned' THEN 1 END) AS returned_count
+                FROM borrowing_records WHERE user_id = :uid
+            ");
             $stmt->execute([':uid' => $userId]);
-            $borrowedCount = (int)$stmt->fetchColumn();
-
-            $stmt = $db->prepare("SELECT COUNT(*) FROM borrowing_records WHERE user_id = :uid AND status = 'Overdue'");
-            $stmt->execute([':uid' => $userId]);
-            $overdueCount = (int)$stmt->fetchColumn();
+            $bCounts = $stmt->fetch() ?: [];
+            $borrowedCount = (int)($bCounts['borrowed_count'] ?? 0);
+            $overdueCount  = (int)($bCounts['overdue_count'] ?? 0);
+            $returnedCount = (int)($bCounts['returned_count'] ?? 0);
 
             $stmt = $db->prepare("SELECT COUNT(*) FROM reservations WHERE user_id = :uid AND status IN ('Pending', 'Approved')");
             $stmt->execute([':uid' => $userId]);
             $reserveCount = (int)$stmt->fetchColumn();
 
-            $stmt = $db->prepare("SELECT COUNT(*) FROM borrowing_records WHERE user_id = :uid AND status = 'Returned'");
-            $stmt->execute([':uid' => $userId]);
-            $returnedCount = (int)$stmt->fetchColumn();
-
-            // Calculate due soon in PHP for cross-database compatibility (MySQL & PostgreSQL)
-            $dueStmt = $db->prepare("SELECT due_date FROM borrowing_records WHERE user_id = :uid AND status = 'Borrowed'");
-            $dueStmt->execute([':uid' => $userId]);
-            $dueRows = $dueStmt->fetchAll();
-            $dueSoonCount = 0;
-            $today = new DateTime('today');
-            foreach ($dueRows as $dr) {
-                if (!empty($dr['due_date'])) {
-                    $diff = (int)$today->diff(new DateTime($dr['due_date']))->format('%r%a');
-                    if ($diff >= 0 && $diff <= 2) {
-                        $dueSoonCount++;
-                    }
-                }
-            }
-
             // My current borrowings
+            $today = new DateTime('today');
             $stmt = $db->prepare("
                 SELECT br.borrow_id, br.borrow_date, br.due_date, br.return_date, br.status,
                        b.title AS book_title, b.author, bc.barcode
@@ -76,7 +69,11 @@ try {
             $myBorrowings = $stmt->fetchAll();
             foreach ($myBorrowings as &$mb) {
                 if (!empty($mb['due_date'])) {
-                    $mb['days_left'] = (int)$today->diff(new DateTime($mb['due_date']))->format('%r%a');
+                    $diff = (int)$today->diff(new DateTime($mb['due_date']))->format('%r%a');
+                    $mb['days_left'] = $diff;
+                    if ($mb['status'] === 'Borrowed' && $diff >= 0 && $diff <= 2) {
+                        $dueSoonCount++;
+                    }
                 } else {
                     $mb['days_left'] = 0;
                 }
@@ -116,15 +113,16 @@ try {
             }
         }
 
-        // Featured books that students can browse and reserve
+        // Fast featured books: limits to latest 6 books first before joining copies
         $featuredBooks = $db->query("
             SELECT b.book_id, b.title, b.author, b.isbn, c.category_name,
-                   (SELECT COUNT(*) FROM book_copies bc WHERE bc.book_id = b.book_id AND bc.status = 'Available') AS available_copies,
-                   (SELECT COUNT(*) FROM book_copies bc WHERE bc.book_id = b.book_id) AS total_copies
-            FROM books b
+                   COUNT(bc.copy_id) AS total_copies,
+                   COUNT(CASE WHEN bc.status = 'Available' THEN 1 END) AS available_copies
+            FROM (SELECT book_id, category_id, isbn, title, author FROM books ORDER BY book_id DESC LIMIT 6) b
             LEFT JOIN categories c ON b.category_id = c.category_id
+            LEFT JOIN book_copies bc ON bc.book_id = b.book_id
+            GROUP BY b.book_id, b.title, b.author, b.isbn, c.category_name
             ORDER BY b.book_id DESC
-            LIMIT 6
         ")->fetchAll();
 
         jsonResponse([
@@ -136,7 +134,7 @@ try {
                 'my_reservations' => $reserveCount,
                 'my_returned'     => $returnedCount,
                 'borrow_quota'    => 3,
-                'total_catalog'   => (int)$db->query("SELECT COUNT(*) FROM books")->fetchColumn(),
+                'total_catalog'   => count($featuredBooks),
             ],
             'my_borrowings'   => $myBorrowings,
             'my_reservations' => $myReservations,
@@ -145,14 +143,17 @@ try {
 
     } elseif ($userRole === 'Librarian') {
         // ═════════════════════════════════════════════════════════════════════
-        // LIBRARIAN DASHBOARD DATA
+        // LIBRARIAN DASHBOARD DATA (Optimized: Combined Stats Query)
         // ═════════════════════════════════════════════════════════════════════
-        $totalBooks          = (int)$db->query("SELECT COUNT(*) FROM books")->fetchColumn();
-        $availableCopies     = (int)$db->query("SELECT COUNT(*) FROM book_copies WHERE status = 'Available'")->fetchColumn();
-        $totalStudents       = (int)$db->query("SELECT COUNT(*) FROM students")->fetchColumn();
-        $activeBorrowings    = (int)$db->query("SELECT COUNT(*) FROM borrowing_records WHERE status = 'Borrowed'")->fetchColumn();
-        $pendingReservations = (int)$db->query("SELECT COUNT(*) FROM reservations WHERE status = 'Pending'")->fetchColumn();
-        $overdue             = (int)$db->query("SELECT COUNT(*) FROM borrowing_records WHERE status = 'Overdue'")->fetchColumn();
+        $statsRow = $db->query("
+            SELECT 
+                (SELECT COUNT(*) FROM books) AS total_books,
+                (SELECT COUNT(*) FROM book_copies WHERE status = 'Available') AS available_copies,
+                (SELECT COUNT(*) FROM students) AS total_students,
+                (SELECT COUNT(*) FROM reservations WHERE status = 'Pending') AS pending_reservations,
+                (SELECT COUNT(*) FROM borrowing_records WHERE status = 'Borrowed') AS active_borrowings,
+                (SELECT COUNT(*) FROM borrowing_records WHERE status = 'Overdue') AS overdue
+        ")->fetch() ?: [];
 
         $recentActivity = $db->query("
             SELECT br.borrow_id, s.name AS student_name, u.full_name, b.title AS book_title,
@@ -181,12 +182,12 @@ try {
         jsonResponse([
             'role' => 'Librarian',
             'stats' => [
-                'total_books'          => $totalBooks,
-                'available_copies'     => $availableCopies,
-                'total_students'       => $totalStudents,
-                'active_borrowings'    => $activeBorrowings,
-                'pending_reservations' => $pendingReservations,
-                'overdue'              => $overdue,
+                'total_books'          => (int)($statsRow['total_books'] ?? 0),
+                'available_copies'     => (int)($statsRow['available_copies'] ?? 0),
+                'total_students'       => (int)($statsRow['total_students'] ?? 0),
+                'active_borrowings'    => (int)($statsRow['active_borrowings'] ?? 0),
+                'pending_reservations' => (int)($statsRow['pending_reservations'] ?? 0),
+                'overdue'              => (int)($statsRow['overdue'] ?? 0),
             ],
             'recent_activity'           => $recentActivity,
             'pending_reservations_list' => $pendingReservationsList,
@@ -194,16 +195,19 @@ try {
 
     } else {
         // ═════════════════════════════════════════════════════════════════════
-        // ADMINISTRATOR DASHBOARD DATA
+        // ADMINISTRATOR DASHBOARD DATA (Optimized: Combined Stats Query)
         // ═════════════════════════════════════════════════════════════════════
-        $totalUsers          = (int)$db->query("SELECT COUNT(*) FROM users")->fetchColumn();
-        $totalStudents       = (int)$db->query("SELECT COUNT(*) FROM students")->fetchColumn();
-        $totalBooks          = (int)$db->query("SELECT COUNT(*) FROM books")->fetchColumn();
-        $totalCopies         = (int)$db->query("SELECT COUNT(*) FROM book_copies")->fetchColumn();
-        $activeBorrowings    = (int)$db->query("SELECT COUNT(*) FROM borrowing_records WHERE status = 'Borrowed'")->fetchColumn();
-        $totalCourses        = (int)$db->query("SELECT COUNT(*) FROM courses")->fetchColumn();
-        $totalCategories     = (int)$db->query("SELECT COUNT(*) FROM categories")->fetchColumn();
-        $overdue             = (int)$db->query("SELECT COUNT(*) FROM borrowing_records WHERE status = 'Overdue'")->fetchColumn();
+        $statsRow = $db->query("
+            SELECT 
+                (SELECT COUNT(*) FROM users) AS total_users,
+                (SELECT COUNT(*) FROM students) AS total_students,
+                (SELECT COUNT(*) FROM books) AS total_books,
+                (SELECT COUNT(*) FROM book_copies) AS total_copies,
+                (SELECT COUNT(*) FROM borrowing_records WHERE status = 'Borrowed') AS active_borrowings,
+                (SELECT COUNT(*) FROM borrowing_records WHERE status = 'Overdue') AS overdue,
+                (SELECT COUNT(*) FROM courses) AS total_courses,
+                (SELECT COUNT(*) FROM categories) AS total_categories
+        ")->fetch() ?: [];
 
         $userRoles = $db->query("SELECT role, COUNT(*) as cnt FROM users GROUP BY role")->fetchAll(PDO::FETCH_KEY_PAIR);
 
@@ -243,14 +247,14 @@ try {
         jsonResponse([
             'role' => 'Admin',
             'stats' => [
-                'total_users'       => $totalUsers,
-                'total_students'    => $totalStudents,
-                'total_books'       => $totalBooks,
-                'total_copies'      => $totalCopies,
-                'active_borrowings' => $activeBorrowings,
-                'total_courses'     => $totalCourses,
-                'total_categories'  => $totalCategories,
-                'overdue'           => $overdue,
+                'total_users'       => (int)($statsRow['total_users'] ?? 0),
+                'total_students'    => (int)($statsRow['total_students'] ?? 0),
+                'total_books'       => (int)($statsRow['total_books'] ?? 0),
+                'total_copies'      => (int)($statsRow['total_copies'] ?? 0),
+                'active_borrowings' => (int)($statsRow['active_borrowings'] ?? 0),
+                'total_courses'     => (int)($statsRow['total_courses'] ?? 0),
+                'total_categories'  => (int)($statsRow['total_categories'] ?? 0),
+                'overdue'           => (int)($statsRow['overdue'] ?? 0),
                 'roles_breakdown'   => $userRoles,
             ],
             'recent_users'    => $recentUsers,

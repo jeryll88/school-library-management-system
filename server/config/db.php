@@ -47,6 +47,7 @@ function getDB() {
                     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                     PDO::ATTR_EMULATE_PREPARES   => false,
+                    PDO::ATTR_PERSISTENT         => true,
                 ]);
             } else {
                 // Local XAMPP MySQL fallback
@@ -61,10 +62,9 @@ function getDB() {
                     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
                     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                     PDO::ATTR_EMULATE_PREPARES   => false,
+                    PDO::ATTR_PERSISTENT         => true,
                 ]);
             }
-            // Auto-ensure copy_id exists on reservations table across all environments
-            ensureReservationCopyColumn($pdo);
         } catch (PDOException $e) {
             error_log('Database connection failed: ' . $e->getMessage());
             while (ob_get_level() > 0) {
@@ -90,6 +90,9 @@ if (!function_exists('ensureReservationCopyColumn')) {
             $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
             if ($driver === 'pgsql') {
                 $db->exec("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS copy_id INTEGER REFERENCES book_copies(copy_id) ON DELETE SET NULL");
+                // Ensure check constraint allows Rejected status
+                $db->exec("ALTER TABLE reservations DROP CONSTRAINT IF EXISTS reservations_status_check");
+                $db->exec("ALTER TABLE reservations ADD CONSTRAINT reservations_status_check CHECK (status IN ('Pending', 'Approved', 'Cancelled', 'Fulfilled', 'Rejected'))");
             } else {
                 $check = $db->query("SHOW COLUMNS FROM reservations LIKE 'copy_id'")->fetch();
                 if (!$check) {

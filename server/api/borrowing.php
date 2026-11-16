@@ -15,6 +15,11 @@ $method   = $_SERVER['REQUEST_METHOD'];
 $currUser = $account['user_id'];
 $currRole = $account['role'];
 
+// Ensure reservations table has copy_id column (defined in db.php)
+if (function_exists('ensureReservationCopyColumn')) {
+    ensureReservationCopyColumn($db);
+}
+
 if ($method !== 'GET' && !in_array($currRole, ['Admin', 'Librarian'], true)) {
     jsonResponse(['error' => 'Only library staff can process borrowing and returns'], 403);
 }
@@ -97,7 +102,7 @@ switch ($method) {
             if (empty($input[$f])) jsonResponse(['error' => "Field '$f' is required"], 422);
         }
 
-        $borrowerStmt = $db->prepare("SELECT user_id FROM users WHERE user_id = :id AND role = 'User' AND is_active = 1");
+        $borrowerStmt = $db->prepare("SELECT user_id FROM users WHERE user_id = :id AND role = 'User' AND (is_active = 1 OR is_active IS TRUE)");
         $borrowerStmt->execute([':id' => $input['user_id']]);
         if (!$borrowerStmt->fetch()) {
             jsonResponse(['error' => 'An active student account is required to issue a book'], 422);
@@ -138,13 +143,18 @@ switch ($method) {
         if (!$copy) jsonResponse(['error' => 'Book copy not found'], 404);
 
         // If copy is Reserved, verify whether it belongs to an Approved reservation for this student
-        $resStmt = $db->prepare("
-            SELECT reservation_id FROM reservations 
-            WHERE copy_id = :copy_id AND user_id = :user_id AND status = 'Approved'
-            LIMIT 1
-        ");
-        $resStmt->execute([':copy_id' => $input['copy_id'], ':user_id' => $input['user_id']]);
-        $approvedRes = $resStmt->fetch();
+        $approvedRes = null;
+        try {
+            $resStmt = $db->prepare("
+                SELECT reservation_id FROM reservations 
+                WHERE copy_id = :copy_id AND user_id = :user_id AND status = 'Approved'
+                LIMIT 1
+            ");
+            $resStmt->execute([':copy_id' => $input['copy_id'], ':user_id' => $input['user_id']]);
+            $approvedRes = $resStmt->fetch();
+        } catch (Throwable $e) {
+            $approvedRes = null;
+        }
 
         if ($copy['status'] === 'Reserved') {
             if (!$approvedRes) {
@@ -155,18 +165,35 @@ switch ($method) {
         }
 
         // Create borrowing record
-        $stmt = $db->prepare("
-            INSERT INTO borrowing_records (user_id, copy_id, issued_by, borrow_date, due_date, status)
-            VALUES (:user, :copy, :issued, :borrow, :due, 'Borrowed')
-        ");
-        $stmt->execute([
-            ':user'   => $input['user_id'],
-            ':copy'   => $input['copy_id'],
-            ':issued' => $currUser,
-            ':borrow' => $input['borrow_date'],
-            ':due'    => $input['due_date'],
-        ]);
-        $borrowId = $db->lastInsertId();
+        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $stmt = $db->prepare("
+                INSERT INTO borrowing_records (user_id, copy_id, issued_by, borrow_date, due_date, status)
+                VALUES (:user, :copy, :issued, :borrow, :due, 'Borrowed')
+                RETURNING borrow_id
+            ");
+            $stmt->execute([
+                ':user'   => $input['user_id'],
+                ':copy'   => $input['copy_id'],
+                ':issued' => $currUser,
+                ':borrow' => $input['borrow_date'],
+                ':due'    => $input['due_date'],
+            ]);
+            $borrowId = $stmt->fetchColumn();
+        } else {
+            $stmt = $db->prepare("
+                INSERT INTO borrowing_records (user_id, copy_id, issued_by, borrow_date, due_date, status)
+                VALUES (:user, :copy, :issued, :borrow, :due, 'Borrowed')
+            ");
+            $stmt->execute([
+                ':user'   => $input['user_id'],
+                ':copy'   => $input['copy_id'],
+                ':issued' => $currUser,
+                ':borrow' => $input['borrow_date'],
+                ':due'    => $input['due_date'],
+            ]);
+            $borrowId = $db->lastInsertId();
+        }
 
         // Update copy status to Borrowed
         $db->prepare("UPDATE book_copies SET status='Borrowed' WHERE copy_id=:id")

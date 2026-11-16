@@ -37,7 +37,7 @@ $displayRole  = ($currentUser['role'] === 'User') ? 'Student' : $currentUser['ro
         }
     </script>
     <!-- Custom Main Stylesheet -->
-    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/main.css?v=<?= filemtime(__DIR__ . '/../assets/css/main.css') ?: time() ?>">
 </head>
 <body class="flex h-screen overflow-hidden">
 
@@ -269,6 +269,6 @@ $displayRole  = ($currentUser['role'] === 'User') ? 'Student' : $currentUser['ro
             });
         });
     </script>
-    <script src="assets/app.js"></script>
+    <script src="assets/app.js?v=<?= filemtime(__DIR__ . '/../assets/app.js') ?: time() ?>"></script>
 </body>
 </html>

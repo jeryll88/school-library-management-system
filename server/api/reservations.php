@@ -52,35 +52,71 @@ switch ($method) {
         }
         $whereSQL = $where ? 'WHERE ' . implode(' AND ', $where) : '';
 
-        $countStmt = $db->prepare("
-            SELECT COUNT(*) FROM reservations r
-            JOIN users u ON r.user_id = u.user_id
-            LEFT JOIN students s ON u.student_id = s.id
-            JOIN books b ON r.book_id = b.book_id
-            $whereSQL
-        ");
-        $countStmt->execute($params);
-        $total = (int)$countStmt->fetchColumn();
+        try {
+            $countStmt = $db->prepare("
+                SELECT COUNT(*) FROM reservations r
+                JOIN users u ON r.user_id = u.user_id
+                LEFT JOIN students s ON u.student_id = s.id
+                JOIN books b ON r.book_id = b.book_id
+                $whereSQL
+            ");
+            $countStmt->execute($params);
+            $total = (int)$countStmt->fetchColumn();
 
-        $stmt = $db->prepare("
-            SELECT r.reservation_id, r.reservation_date, r.status, r.copy_id,
-                   bc.barcode AS reserved_barcode,
-                   s.name AS student_name, u.full_name,
-                   b.title AS book_title, b.book_id
-            FROM reservations r
-            JOIN users u ON r.user_id = u.user_id
-            LEFT JOIN students s ON u.student_id = s.id
-            JOIN books b ON r.book_id = b.book_id
-            LEFT JOIN book_copies bc ON r.copy_id = bc.copy_id
-            $whereSQL
-            ORDER BY r.reservation_date DESC
-            LIMIT :limit OFFSET :offset
-        ");
-        foreach ($params as $k => $v) $stmt->bindValue($k, $v);
-        $stmt->bindValue(':limit',  $limit,  PDO::PARAM_INT);
-        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
-        $stmt->execute();
-        jsonResponse(['data' => $stmt->fetchAll(), 'total' => $total, 'page' => $page, 'limit' => $limit]);
+            $stmt = $db->prepare("
+                SELECT r.reservation_id, r.reservation_date, r.status, r.copy_id,
+                       bc.barcode AS reserved_barcode,
+                       s.name AS student_name, u.full_name,
+                       b.title AS book_title, b.book_id
+                FROM reservations r
+                JOIN users u ON r.user_id = u.user_id
+                LEFT JOIN students s ON u.student_id = s.id
+                JOIN books b ON r.book_id = b.book_id
+                LEFT JOIN book_copies bc ON r.copy_id = bc.copy_id
+                $whereSQL
+                ORDER BY r.reservation_id DESC
+                LIMIT :limit OFFSET :offset
+            ");
+            foreach ($params as $k => $v) $stmt->bindValue($k, $v);
+            $stmt->bindValue(':limit',  $limit,  PDO::PARAM_INT);
+            $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+            $stmt->execute();
+            $resData = $stmt->fetchAll();
+        } catch (Throwable $e) {
+            // Fallback if copy_id column is missing or table structure varies
+            try {
+                $countStmt = $db->prepare("
+                    SELECT COUNT(*) FROM reservations r
+                    JOIN users u ON r.user_id = u.user_id
+                    JOIN books b ON r.book_id = b.book_id
+                    $whereSQL
+                ");
+                $countStmt->execute($params);
+                $total = (int)$countStmt->fetchColumn();
+
+                $stmt = $db->prepare("
+                    SELECT r.reservation_id, r.reservation_date, r.status, NULL AS copy_id,
+                           NULL AS reserved_barcode,
+                           u.full_name AS student_name, u.full_name,
+                           b.title AS book_title, b.book_id
+                    FROM reservations r
+                    JOIN users u ON r.user_id = u.user_id
+                    JOIN books b ON r.book_id = b.book_id
+                    $whereSQL
+                    ORDER BY r.reservation_id DESC
+                    LIMIT :limit OFFSET :offset
+                ");
+                foreach ($params as $k => $v) $stmt->bindValue($k, $v);
+                $stmt->bindValue(':limit',  $limit,  PDO::PARAM_INT);
+                $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+                $stmt->execute();
+                $resData = $stmt->fetchAll();
+            } catch (Throwable $e2) {
+                $resData = [];
+                $total = 0;
+            }
+        }
+        jsonResponse(['data' => $resData, 'total' => $total, 'page' => $page, 'limit' => $limit]);
         break;
 
     case 'POST':
@@ -89,7 +125,7 @@ switch ($method) {
         if ($targetUser < 1 || empty($input['book_id'])) {
             jsonResponse(['error' => 'A valid user and book are required'], 422);
         }
-        $borrower = $db->prepare("SELECT user_id FROM users WHERE user_id = :user_id AND role = 'User' AND is_active = 1");
+        $borrower = $db->prepare("SELECT user_id FROM users WHERE user_id = :user_id AND role = 'User' AND (is_active = 1 OR is_active IS TRUE)");
         $borrower->execute([':user_id' => $targetUser]);
         if (!$borrower->fetch()) {
             jsonResponse(['error' => 'Reservations must belong to an active student account'], 422);
@@ -120,9 +156,17 @@ switch ($method) {
             jsonResponse(['error' => 'All copies of "' . $bookRow['title'] . '" are currently borrowed or reserved. No copies available to reserve.'], 400);
         }
 
-        $stmt = $db->prepare("INSERT INTO reservations (user_id, book_id, status) VALUES (:user, :book, 'Pending')");
-        $stmt->execute([':user' => $targetUser, ':book' => $input['book_id']]);
-        jsonResponse(['success' => true, 'reservation_id' => $db->lastInsertId()], 201);
+        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+        if ($driver === 'pgsql') {
+            $stmt = $db->prepare("INSERT INTO reservations (user_id, book_id, status) VALUES (:user, :book, 'Pending') RETURNING reservation_id");
+            $stmt->execute([':user' => $targetUser, ':book' => $input['book_id']]);
+            $resId = $stmt->fetchColumn();
+        } else {
+            $stmt = $db->prepare("INSERT INTO reservations (user_id, book_id, status) VALUES (:user, :book, 'Pending')");
+            $stmt->execute([':user' => $targetUser, ':book' => $input['book_id']]);
+            $resId = $db->lastInsertId();
+        }
+        jsonResponse(['success' => true, 'reservation_id' => $resId], 201);
         break;
 
     case 'PUT':

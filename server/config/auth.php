@@ -215,29 +215,34 @@ function requireApiAccount($allowedRoles = []) {
 
     $user = getCurrentUser();
 
-    // Verify account is still active in database
-    try {
-        $db = getDB();
-        $stmt = $db->prepare("SELECT user_id, role, is_active FROM users WHERE user_id = :id LIMIT 1");
-        $stmt->execute([':id' => $user['user_id']]);
-        $row = $stmt->fetch();
+    // Verify account is still active in database (cached for 60s to eliminate redundant roundtrips)
+    $now = time();
+    $lastChecked = $_SESSION['active_checked_at'] ?? 0;
+    if ($now - $lastChecked > 60) {
+        try {
+            $db = getDB();
+            $stmt = $db->prepare("SELECT user_id, role, is_active FROM users WHERE user_id = :id LIMIT 1");
+            $stmt->execute([':id' => $user['user_id']]);
+            $row = $stmt->fetch();
 
-        if (!$row || (int)($row['is_active'] ?? 1) !== 1) {
-            clearSessionUser();
-            if (function_exists('jsonResponse')) {
-                jsonResponse(['error' => 'Account is deactivated or suspended'], 403);
-            } else {
-                http_response_code(403);
-                header('Content-Type: application/json');
-                echo json_encode(['error' => 'Account is deactivated or suspended']);
-                exit;
+            if (!$row || (int)($row['is_active'] ?? 1) !== 1) {
+                clearSessionUser();
+                if (function_exists('jsonResponse')) {
+                    jsonResponse(['error' => 'Account is deactivated or suspended'], 403);
+                } else {
+                    http_response_code(403);
+                    header('Content-Type: application/json');
+                    echo json_encode(['error' => 'Account is deactivated or suspended']);
+                    exit;
+                }
             }
-        }
 
-        $_SESSION['role'] = $row['role'];
-        $user['role']     = $row['role'];
-    } catch (Exception $e) {
-        // Fallback to session
+            $_SESSION['role'] = $row['role'];
+            $_SESSION['active_checked_at'] = $now;
+            $user['role']     = $row['role'];
+        } catch (Exception $e) {
+            // Fallback to session
+        }
     }
 
     if (!empty($allowedRoles)) {

@@ -335,6 +335,7 @@ function renderStudentDashboard(data) {
                         <img src="https://covers.openlibrary.org/b/isbn/${escapeHtml(b.isbn)}-M.jpg?default=false"
                              alt="${escapeHtml(b.title)}"
                              class="w-full h-full object-cover relative z-10"
+                             loading="lazy" decoding="async"
                              onerror="this.remove()" />
                         <span class="font-bold text-xs absolute z-0">${initials}</span>
                     </div>
@@ -869,6 +870,8 @@ async function studentReserveBook(bookId, bookTitle) {
             renderDashboard();
         } else if (State.currentPage === 'reservations') {
             renderReservations();
+        } else if (State.currentPage === 'books') {
+            renderBooks(State.pages.books?.page || 1, State.pages.books?.search || '', State.pages.books?.categoryId || '', State.pages.books?.availOnly || false);
         }
     } catch(err) {
         toast(err.message, 'error');
@@ -928,9 +931,14 @@ function buildGroupedCategoryOptions(cats, selectedId = null) {
 async function renderBooks(page = 1, search = '', categoryId = '', availOnly = false) {
     State.pages.books = { page, search, categoryId, availOnly };
     const isStudent = (window.CURRENT_USER?.role || '').toLowerCase() === 'user';
-    const cats = await api('api/categories.php');
     const availParam = availOnly ? '&available_only=1' : '';
-    const data = await api(`api/books.php?page=${page}&search=${encodeURIComponent(search)}&category=${categoryId}${availParam}`);
+    // Fetch categories in parallel and cache them to avoid redundant roundtrips
+    const catsPromise = State.cachedCategories ? Promise.resolve({ data: State.cachedCategories }) : api('api/categories.php');
+    const [cats, data] = await Promise.all([
+        catsPromise,
+        api(`api/books.php?page=${page}&search=${encodeURIComponent(search)}&category=${categoryId}${availParam}`)
+    ]);
+    if (!State.cachedCategories) State.cachedCategories = cats.data || [];
 
     const catOptions = buildGroupedCategoryOptions(cats.data || [], categoryId);
 
@@ -958,6 +966,7 @@ async function renderBooks(page = 1, search = '', categoryId = '', availOnly = f
                     <div class="w-8 h-11 bg-slate-200 rounded overflow-hidden flex items-center justify-center text-slate-400 shrink-0 text-[10px] relative shadow-2xs">
                         <img src="https://covers.openlibrary.org/b/isbn/${escapeHtml(b.isbn)}-S.jpg?default=false"
                              class="w-full h-full object-cover relative z-10"
+                             loading="lazy" decoding="async"
                              onerror="this.remove()" />
                         <i class="fa-solid fa-book absolute z-0 text-slate-400"></i>
                     </div>
@@ -1473,7 +1482,37 @@ async function deleteCopyRow(copyId) {
 async function renderBorrowing(page = 1, search = '', status = '') {
     State.pages.borrowing = { page, search, status };
     const isStudent = (window.CURRENT_USER?.role || '').toLowerCase() === 'user';
-    const data = await api(`api/borrowing.php?page=${page}&search=${encodeURIComponent(search)}&status=${status}`);
+    let data;
+    try {
+        data = await api(`api/borrowing.php?page=${page}&search=${encodeURIComponent(search)}&status=${status}`);
+    } catch (err) {
+        document.getElementById('page-content').innerHTML = `
+        <div class="section-card p-10 text-center max-w-lg mx-auto mt-8">
+            <div class="w-14 h-14 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 class="font-bold text-slate-800 text-base mb-1">Failed to load borrowing records</h3>
+            <p class="text-xs text-slate-500 mb-5">${escapeHtml(err.message)}</p>
+            <button onclick="renderBorrowing()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition-colors">
+                <i class="fa-solid fa-arrow-rotate-right mr-1.5"></i> Try Again
+            </button>
+        </div>`;
+        return;
+    }
+
+    const emptyHtml = isStudent ? `
+        <tr><td colspan="6" class="text-center py-12">
+            <div class="flex flex-col items-center justify-center gap-2.5">
+                <div class="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-book-bookmark"></i>
+                </div>
+                <div class="font-bold text-slate-700 text-sm">You have no borrowing records found.</div>
+                <p class="text-xs text-slate-400 max-w-xs">You currently don't have any borrowed books. Browse our catalog and reserve books anytime!</p>
+                <button onclick="navigateTo('books')" class="mt-2 bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center gap-1.5">
+                    <i class="fa-solid fa-magnifying-glass"></i> Browse Books to Borrow
+                </button>
+            </div>
+        </td></tr>` : emptyRow(8, 'No borrowing records found');
 
     const rows = (data.data || []).map(r => `
         <tr>
@@ -1488,7 +1527,7 @@ async function renderBorrowing(page = 1, search = '', status = '') {
             <td class="text-center space-x-2">
                 ${r.status !== 'Returned' ? `<button onclick="returnBook(${r.borrow_id})" title="Record Return" class="text-slate-400 hover:text-emerald-600 transition-colors"><i class="fa-solid fa-arrow-rotate-left"></i></button>` : '<span class="text-slate-400 text-xs">—</span>'}
             </td>` : ''}
-        </tr>`).join('') || emptyRow(isStudent ? 6 : 8, isStudent ? 'You have no borrowing records found.' : 'No borrowing records found');
+        </tr>`).join('') || emptyHtml;
 
     const statusOptions = ['', 'Borrowed', 'Returned', 'Overdue'].map(s =>
         `<option value="${s}" ${s === status ? 'selected' : ''}>${s || 'All Statuses'}</option>`).join('');
@@ -1650,7 +1689,42 @@ async function submitReturn(e, borrowId) {
 async function renderReservations(page = 1, search = '', status = '') {
     State.pages.reservations = { page, search, status };
     const isStudent = (window.CURRENT_USER?.role || '').toLowerCase() === 'user';
-    const data = await api(`api/reservations.php?page=${page}&search=${encodeURIComponent(search)}&status=${status}`);
+    let data;
+    try {
+        data = await api(`api/reservations.php?page=${page}&search=${encodeURIComponent(search)}&status=${status}`);
+    } catch (err) {
+        document.getElementById('page-content').innerHTML = `
+        <div class="section-card p-10 text-center max-w-lg mx-auto mt-8">
+            <div class="w-14 h-14 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <h3 class="font-bold text-slate-800 text-base mb-1">Failed to load reservations</h3>
+            <p class="text-xs text-slate-500 mb-5">${escapeHtml(err.message)}</p>
+            <button onclick="renderReservations()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg transition-colors">
+                <i class="fa-solid fa-arrow-rotate-right mr-1.5"></i> Try Again
+            </button>
+        </div>`;
+        return;
+    }
+
+    const emptyHtml = isStudent ? `
+        <tr><td colspan="5" class="text-center py-12">
+            <div class="flex flex-col items-center justify-center gap-2.5">
+                <div class="w-12 h-12 bg-purple-50 text-purple-600 rounded-full flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-bookmark"></i>
+                </div>
+                <div class="font-bold text-slate-700 text-sm">You have no reservations on file.</div>
+                <p class="text-xs text-slate-400 max-w-xs">You haven't reserved any books yet. Browse our catalog and place holds on available copies!</p>
+                <div class="flex items-center gap-2 mt-2">
+                    <button onclick="navigateTo('books')" class="bg-brand-500 hover:bg-brand-600 text-white font-bold text-xs px-4 py-2 rounded-lg shadow-sm transition-colors flex items-center gap-1.5">
+                        <i class="fa-solid fa-book-open"></i> Browse Books to Reserve
+                    </button>
+                    <button onclick="studentAddReservationModal()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3.5 py-2 rounded-lg border border-slate-200 transition-colors flex items-center gap-1.5">
+                        <i class="fa-solid fa-plus"></i> Quick Select
+                    </button>
+                </div>
+            </div>
+        </td></tr>` : emptyRow(6, 'No reservations found');
 
     const rows = (data.data || []).map(r => `
         <tr>
@@ -1687,7 +1761,7 @@ async function renderReservations(page = 1, search = '', status = '') {
                     <button onclick="deleteReservation(${r.reservation_id})" title="Delete Record" class="text-slate-400 hover:text-rose-500 p-1 transition-colors"><i class="fa-regular fa-trash-can text-xs"></i></button>
                 `}
             </td>
-        </tr>`).join('') || emptyRow(isStudent ? 5 : 6, isStudent ? 'You have no reservations on file.' : 'No reservations found');
+        </tr>`).join('') || emptyHtml;
 
     const statusOptions = ['', 'Pending', 'Approved', 'Rejected', 'Cancelled', 'Fulfilled'].map(s =>
         `<option value="${s}" ${s === status ? 'selected' : ''}>${s || 'All Statuses'}</option>`).join('');
@@ -1736,8 +1810,8 @@ async function renderReservations(page = 1, search = '', status = '') {
 }
 
 async function studentAddReservationModal() {
-    const books = await api('api/books.php?page=1');
-    const bookOpts = (books.data || []).map(b => `<option value="${b.book_id}">${escapeHtml(b.title)} (${b.author})</option>`).join('');
+    const books = await api('api/books.php?limit=100&available_only=1');
+    const bookOpts = (books.data || []).map(b => `<option value="${b.book_id}">${escapeHtml(b.title)} (${escapeHtml(b.author)}) — ${b.available_copies} copy available</option>`).join('') || '<option value="" disabled>No available books to reserve right now</option>';
 
     showModal(`
     <div class="modal-overlay">

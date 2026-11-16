@@ -107,12 +107,14 @@ CREATE TABLE reservations (
     reservation_id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL REFERENCES users(user_id) ON UPDATE CASCADE,
     book_id INTEGER NOT NULL REFERENCES books(book_id) ON UPDATE CASCADE,
+    copy_id INTEGER REFERENCES book_copies(copy_id) ON DELETE SET NULL,
     reservation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    status VARCHAR(20) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Cancelled', 'Fulfilled'))
+    status VARCHAR(20) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Cancelled', 'Fulfilled', 'Rejected'))
 );
 
 CREATE INDEX idx_reservation_user ON reservations(user_id);
 CREATE INDEX idx_reservation_book ON reservations(book_id);
+CREATE INDEX idx_reservation_copy ON reservations(copy_id);
 
 -- 10. Create Activity Logs Table
 CREATE TABLE activity_logs (
