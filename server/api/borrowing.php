@@ -102,7 +102,7 @@ switch ($method) {
             if (empty($input[$f])) jsonResponse(['error' => "Field '$f' is required"], 422);
         }
 
-        $borrowerStmt = $db->prepare("SELECT user_id FROM users WHERE user_id = :id AND role = 'User' AND (is_active = 1 OR is_active IS TRUE)");
+        $borrowerStmt = $db->prepare("SELECT user_id FROM users WHERE user_id = :id AND role = 'User' AND is_active = 1");
         $borrowerStmt->execute([':id' => $input['user_id']]);
         if (!$borrowerStmt->fetch()) {
             jsonResponse(['error' => 'An active student account is required to issue a book'], 422);

@@ -125,7 +125,7 @@ switch ($method) {
         if ($targetUser < 1 || empty($input['book_id'])) {
             jsonResponse(['error' => 'A valid user and book are required'], 422);
         }
-        $borrower = $db->prepare("SELECT user_id FROM users WHERE user_id = :user_id AND role = 'User' AND (is_active = 1 OR is_active IS TRUE)");
+        $borrower = $db->prepare("SELECT user_id FROM users WHERE user_id = :user_id AND role = 'User' AND is_active = 1");
         $borrower->execute([':user_id' => $targetUser]);
         if (!$borrower->fetch()) {
             jsonResponse(['error' => 'Reservations must belong to an active student account'], 422);
