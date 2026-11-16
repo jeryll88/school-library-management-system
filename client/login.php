@@ -6,7 +6,7 @@ startAppSession();
 if (isLoggedIn()) {
     $curr = getCurrentUser();
     $roleParam = ($curr['role'] === 'Admin') ? 'admin' : (($curr['role'] === 'Librarian') ? 'librarian' : 'student');
-    header('Location: index.php?role=' . $roleParam);
+    header('Location: /?role=' . $roleParam);
     exit;
 }
 
@@ -63,11 +63,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         // Role-based redirection
                         if ($user['role'] === 'Admin') {
-                            header('Location: index.php?role=admin');
+                            header('Location: /?role=admin');
                         } elseif ($user['role'] === 'Librarian') {
-                            header('Location: index.php?role=librarian');
+                            header('Location: /?role=librarian');
                         } else {
-                            header('Location: index.php?role=student');
+                            header('Location: /?role=student');
                         }
                         exit;
                     } else {

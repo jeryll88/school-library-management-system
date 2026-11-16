@@ -6,7 +6,7 @@ startAppSession();
 
 // If already logged in, redirect to main application
 if (isLoggedIn()) {
-    header('Location: index.php');
+    header('Location: /');
     exit;
 }
 
@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             unset($_SESSION['pwd_reset_user_id']);
             unset($_SESSION['pwd_reset_user_name']);
 
-            header('Location: login.php?reset=1');
+            header('Location: /login?reset=1');
             exit;
         }
     }

@@ -50,7 +50,7 @@ function getCurrentUser() {
 function requirePageAccount($allowedRoles = []) {
     startAppSession();
     if (!isLoggedIn()) {
-        header('Location: login.php');
+        header('Location: /login');
         exit;
     }
 
@@ -67,7 +67,7 @@ function requirePageAccount($allowedRoles = []) {
             if (session_status() === PHP_SESSION_ACTIVE) {
                 session_destroy();
             }
-            header('Location: login.php?error=deactivated');
+            header('Location: /login?error=deactivated');
             exit;
         }
 
@@ -82,7 +82,7 @@ function requirePageAccount($allowedRoles = []) {
         $allowed = array_map('strtolower', array_map('trim', (array)$allowedRoles));
         $userRole = strtolower(trim((string)($user['role'] ?? '')));
         if (!in_array($userRole, $allowed, true)) {
-            header('Location: index.php?error=unauthorized');
+            header('Location: /?error=unauthorized');
             exit;
         }
     }

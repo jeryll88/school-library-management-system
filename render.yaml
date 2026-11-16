@@ -7,10 +7,9 @@ services:
     branch: main
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    healthCheckPath: /login.php
+    healthCheckPath: /api/index.php
     envVars:
       - key: DATABASE_URL
-        sync: false # Set to your Neon PostgreSQL connection string
+        sync: false # Set to your Neon PostgreSQL connection string in Render dashboard
       - key: APP_ENV
         value: production
-
