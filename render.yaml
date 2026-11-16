@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: library-management-system
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    dockerfilePath: Dockerfile
+    healthCheckPath: /login.php
+    envVars:
+      - key: DATABASE_URL
+        sync: false # Paste your Neon PostgreSQL connection string in Render Dashboard
+      - key: APP_ENV
+        value: production
+

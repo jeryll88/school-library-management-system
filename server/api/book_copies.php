@@ -1,0 +1,114 @@
+<?php
+require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/auth.php';
+header('Content-Type: application/json');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type');
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit; }
+
+$account = requireApiAccount();
+$db     = getDB();
+$method = $_SERVER['REQUEST_METHOD'];
+
+if ($method !== 'GET' && !in_array(strtolower($account['role'] ?? ''), ['admin', 'librarian'], true)) {
+    jsonResponse(['error' => 'Only library staff can modify book copies'], 403);
+}
+
+switch ($method) {
+    case 'GET':
+        // Single copy lookup by barcode (for physical scanner)
+        if (isset($_GET['barcode']) && trim($_GET['barcode']) !== '') {
+            $barcode = trim($_GET['barcode']);
+            $stmt = $db->prepare("
+                SELECT bc.*, b.title AS book_title, b.author, b.isbn
+                FROM book_copies bc
+                JOIN books b ON bc.book_id = b.book_id
+                WHERE LOWER(bc.barcode) = LOWER(:barcode)
+                LIMIT 1
+            ");
+            $stmt->execute([':barcode' => $barcode]);
+            $copy = $stmt->fetch();
+            if (!$copy) {
+                jsonResponse(['error' => 'No copy found with barcode ' . $barcode], 404);
+            }
+            jsonResponse(['data' => $copy]);
+            break;
+        }
+
+        $bookId = $_GET['book_id'] ?? '';
+        $search = $_GET['search']  ?? '';
+        $page   = max(1, (int)($_GET['page'] ?? 1));
+        $limit  = 15;
+        $offset = ($page - 1) * $limit;
+
+        $where  = [];
+        $params = [];
+
+        if ($bookId !== '') {
+            $where[]  = "bc.book_id = :book_id";
+            $params[':book_id'] = $bookId;
+        }
+        if ($search !== '') {
+            $where[]  = "(b.title LIKE :search_title OR bc.barcode LIKE :search_barcode)";
+            $params[':search_title'] = "%$search%";
+            $params[':search_barcode'] = "%$search%";
+        }
+        $whereSQL = $where ? 'WHERE ' . implode(' AND ', $where) : '';
+
+        $countStmt = $db->prepare("SELECT COUNT(*) FROM book_copies bc JOIN books b ON bc.book_id=b.book_id $whereSQL");
+        $countStmt->execute($params);
+        $total = (int)$countStmt->fetchColumn();
+
+        $stmt = $db->prepare("
+            SELECT bc.*, b.title AS book_title, b.author
+            FROM book_copies bc
+            JOIN books b ON bc.book_id = b.book_id
+            $whereSQL
+            ORDER BY bc.copy_id ASC
+            LIMIT :limit OFFSET :offset
+        ");
+        foreach ($params as $k => $v) $stmt->bindValue($k, $v);
+        $stmt->bindValue(':limit',  $limit,  PDO::PARAM_INT);
+        $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $stmt->execute();
+        jsonResponse(['data' => $stmt->fetchAll(), 'total' => $total, 'page' => $page, 'limit' => $limit]);
+        break;
+
+    case 'POST':
+        $input = getInput();
+        if (empty($input['book_id']) || empty($input['barcode'])) {
+            jsonResponse(['error' => 'book_id and barcode are required'], 422);
+        }
+        $stmt = $db->prepare("INSERT INTO book_copies (book_id, barcode, status) VALUES (:book_id, :barcode, :status)");
+        $stmt->execute([
+            ':book_id' => $input['book_id'],
+            ':barcode' => $input['barcode'],
+            ':status'  => $input['status'] ?? 'Available',
+        ]);
+        jsonResponse(['success' => true, 'copy_id' => $db->lastInsertId()], 201);
+        break;
+
+    case 'PUT':
+        $input = getInput();
+        $id    = $_GET['id'] ?? $input['copy_id'] ?? null;
+        if (!$id) jsonResponse(['error' => 'Copy ID required'], 422);
+        $stmt = $db->prepare("UPDATE book_copies SET barcode=:barcode, status=:status WHERE copy_id=:id");
+        $stmt->execute([
+            ':barcode' => $input['barcode'] ?? '',
+            ':status'  => $input['status']  ?? 'Available',
+            ':id'      => $id,
+        ]);
+        jsonResponse(['success' => true]);
+        break;
+
+    case 'DELETE':
+        $id = $_GET['id'] ?? null;
+        if (!$id) jsonResponse(['error' => 'Copy ID required'], 422);
+        $db->prepare("DELETE FROM book_copies WHERE copy_id = :id")->execute([':id' => $id]);
+        jsonResponse(['success' => true]);
+        break;
+
+    default:
+        jsonResponse(['error' => 'Method not allowed'], 405);
+}
