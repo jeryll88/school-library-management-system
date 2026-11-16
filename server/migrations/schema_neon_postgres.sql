@@ -109,6 +109,7 @@ CREATE TABLE reservations (
     book_id INTEGER NOT NULL REFERENCES books(book_id) ON UPDATE CASCADE,
     copy_id INTEGER REFERENCES book_copies(copy_id) ON DELETE SET NULL,
     reservation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    due_date DATE,
     status VARCHAR(20) NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Approved', 'Cancelled', 'Fulfilled', 'Rejected'))
 );
 
@@ -116,7 +117,21 @@ CREATE INDEX idx_reservation_user ON reservations(user_id);
 CREATE INDEX idx_reservation_book ON reservations(book_id);
 CREATE INDEX idx_reservation_copy ON reservations(copy_id);
 
--- 10. Create Activity Logs Table
+-- 10. Create Notifications Table
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL DEFAULT 'general',
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    link VARCHAR(255),
+    is_read SMALLINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_notifications_user ON notifications(user_id, is_read);
+
+-- 11. Create Activity Logs Table
 CREATE TABLE activity_logs (
     activity_id BIGSERIAL PRIMARY KEY,
     admin_user_id INTEGER NOT NULL,

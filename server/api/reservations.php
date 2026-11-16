@@ -24,6 +24,15 @@ $currRole = $account['role'];
 if (function_exists('ensureReservationCopyColumn')) {
     ensureReservationCopyColumn($db);
 }
+if (function_exists('ensureReservationDueDateColumn')) {
+    ensureReservationDueDateColumn($db);
+}
+if (function_exists('ensureNotificationsTable')) {
+    ensureNotificationsTable($db);
+}
+if (function_exists('checkAndCreateOverdueNotifications')) {
+    checkAndCreateOverdueNotifications($db);
+}
 
 switch ($method) {
     case 'GET':
@@ -64,7 +73,7 @@ switch ($method) {
             $total = (int)$countStmt->fetchColumn();
 
             $stmt = $db->prepare("
-                SELECT r.reservation_id, r.reservation_date, r.status, r.copy_id, r.user_id,
+                SELECT r.reservation_id, r.reservation_date, r.due_date, r.status, r.copy_id, r.user_id,
                        bc.barcode AS reserved_barcode,
                        s.name AS student_name, s.student_number, u.full_name, u.username,
                        b.title AS book_title, b.book_id
@@ -95,7 +104,7 @@ switch ($method) {
                 $total = (int)$countStmt->fetchColumn();
 
                 $stmt = $db->prepare("
-                    SELECT r.reservation_id, r.reservation_date, r.status, NULL AS copy_id,
+                    SELECT r.reservation_id, r.reservation_date, NULL AS due_date, r.status, NULL AS copy_id,
                            NULL AS reserved_barcode,
                            u.full_name AS student_name, u.full_name,
                            b.title AS book_title, b.book_id
@@ -271,33 +280,102 @@ switch ($method) {
             $existingCopyId  = $res['copy_id'];
 
             if ($newStatus === 'Approved') {
-                // Ensure copy is assigned and marked Reserved
+                $borrowDate = !empty($input['borrow_date']) ? trim($input['borrow_date']) : date('Y-m-d');
+                $dueDate    = !empty($input['due_date']) ? trim($input['due_date']) : date('Y-m-d', strtotime('+14 days'));
+
+                // Ensure copy is assigned
                 if (empty($existingCopyId)) {
                     $findCopy = $db->prepare("
                         SELECT copy_id FROM book_copies 
-                        WHERE book_id = :book_id AND status = 'Available' 
+                        WHERE book_id = :book_id AND status IN ('Available', 'Reserved') 
                         ORDER BY copy_id ASC LIMIT 1
                     ");
                     $findCopy->execute([':book_id' => $bookId]);
                     $copyRow = $findCopy->fetch();
                     if (!$copyRow) {
-                        jsonResponse(['error' => 'Cannot approve reservation: no available stock/copies left for this book.'], 409);
+                        jsonResponse(['error' => 'Cannot approve reservation: no available copies left for this book.'], 409);
                     }
                     $existingCopyId = (int)$copyRow['copy_id'];
-                    $db->prepare("UPDATE book_copies SET status = 'Reserved' WHERE copy_id = :copy_id")
-                       ->execute([':copy_id' => $existingCopyId]);
-                } else {
-                    $db->prepare("UPDATE book_copies SET status = 'Reserved' WHERE copy_id = :copy_id")
-                       ->execute([':copy_id' => $existingCopyId]);
                 }
-                $stmt = $db->prepare("UPDATE reservations SET status = 'Approved', copy_id = :copy_id WHERE reservation_id = :id");
-                $stmt->execute([':copy_id' => $existingCopyId, ':id' => $id]);
+
+                // Update copy status to Borrowed
+                $db->prepare("UPDATE book_copies SET status = 'Borrowed' WHERE copy_id = :copy_id")
+                   ->execute([':copy_id' => $existingCopyId]);
+
+                // Update reservation record with Approved status, assigned copy_id, and due_date
+                $stmt = $db->prepare("UPDATE reservations SET status = 'Approved', copy_id = :copy_id, due_date = :due_date WHERE reservation_id = :id");
+                $stmt->execute([':copy_id' => $existingCopyId, ':due_date' => $dueDate, ':id' => $id]);
+
+                // Create or update active borrowing record
+                $chkBorrow = $db->prepare("
+                    SELECT borrow_id FROM borrowing_records 
+                    WHERE copy_id = :cid AND user_id = :uid AND status IN ('Borrowed', 'Overdue')
+                    LIMIT 1
+                ");
+                $chkBorrow->execute([':cid' => $existingCopyId, ':uid' => (int)$res['user_id']]);
+                $existingBorrowId = $chkBorrow->fetchColumn();
+
+                if ($existingBorrowId) {
+                    $bStmt = $db->prepare("
+                        UPDATE borrowing_records 
+                        SET borrow_date = :borrow, due_date = :due, status = 'Borrowed', issued_by = :issued 
+                        WHERE borrow_id = :bid
+                    ");
+                    $bStmt->execute([
+                        ':borrow' => $borrowDate,
+                        ':due'    => $dueDate,
+                        ':issued' => $currUser,
+                        ':bid'    => $existingBorrowId,
+                    ]);
+                } else {
+                    $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+                    if ($driver === 'pgsql') {
+                        $bStmt = $db->prepare("
+                            INSERT INTO borrowing_records (user_id, copy_id, issued_by, borrow_date, due_date, status)
+                            VALUES (:user, :copy, :issued, :borrow, :due, 'Borrowed')
+                            RETURNING borrow_id
+                        ");
+                    } else {
+                        $bStmt = $db->prepare("
+                            INSERT INTO borrowing_records (user_id, copy_id, issued_by, borrow_date, due_date, status)
+                            VALUES (:user, :copy, :issued, :borrow, :due, 'Borrowed')
+                        ");
+                    }
+                    $bStmt->execute([
+                        ':user'   => (int)$res['user_id'],
+                        ':copy'   => $existingCopyId,
+                        ':issued' => $currUser,
+                        ':borrow' => $borrowDate,
+                        ':due'    => $dueDate,
+                    ]);
+                }
+
+                // Send in-app notification to student
+                try {
+                    $bTitleStmt = $db->prepare("SELECT title FROM books WHERE book_id = :bid");
+                    $bTitleStmt->execute([':bid' => $bookId]);
+                    $bookTitle = $bTitleStmt->fetchColumn() ?: 'Reserved Book';
+                    $formattedDueDate = date('M d, Y', strtotime($dueDate));
+
+                    $db->prepare("
+                        INSERT INTO notifications (user_id, type, title, message, link)
+                        VALUES (:uid, 'reservation_approved', :title, :msg, 'borrowing')
+                    ")->execute([
+                        ':uid'   => (int)$res['user_id'],
+                        ':title' => "Reservation Approved: {$bookTitle}",
+                        ':msg'   => "Your reservation for \"{$bookTitle}\" has been approved! The book is issued to you and must be returned on or before {$formattedDueDate}. Late returns incur a penalty fee of ₱10.00 per day overdue.",
+                    ]);
+                } catch (Throwable $e) {}
 
             } elseif (in_array($newStatus, ['Cancelled', 'Rejected'], true)) {
                 // If Cancelled or Rejected: release copy back to Available (stock increases by 1)
                 if (!empty($existingCopyId)) {
-                    $db->prepare("UPDATE book_copies SET status = 'Available' WHERE copy_id = :copy_id AND status = 'Reserved'")
+                    $db->prepare("UPDATE book_copies SET status = 'Available' WHERE copy_id = :copy_id AND status IN ('Reserved', 'Borrowed')")
                        ->execute([':copy_id' => $existingCopyId]);
+
+                    // Cancel any active unreturned borrowing record linked to this copy and user
+                    $db->prepare("UPDATE borrowing_records SET status = 'Returned', return_date = CURRENT_DATE WHERE copy_id = :copy_id AND user_id = :uid AND status IN ('Borrowed', 'Overdue')")
+                       ->execute([':copy_id' => $existingCopyId, ':uid' => (int)$res['user_id']]);
                 }
                 $stmt = $db->prepare("UPDATE reservations SET status = :status, copy_id = NULL WHERE reservation_id = :id");
                 $stmt->execute([':status' => $newStatus, ':id' => $id]);

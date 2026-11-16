@@ -51,7 +51,9 @@ switch ($method) {
             $params[':status'] = $status;
         }
 
-        if ($currRole !== 'User') {
+        if (function_exists('checkAndCreateOverdueNotifications')) {
+            checkAndCreateOverdueNotifications($db);
+        } else {
             $db->query("UPDATE borrowing_records SET status='Overdue' WHERE status='Borrowed' AND due_date < CURRENT_DATE");
         }
 

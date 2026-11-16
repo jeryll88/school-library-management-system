@@ -66,7 +66,10 @@ function getDB() {
             }
             // Auto-ensure schema & default system users across all environments
             ensureReservationCopyColumn($pdo);
+            ensureReservationDueDateColumn($pdo);
+            ensureNotificationsTable($pdo);
             ensureDefaultUsers($pdo);
+            checkAndCreateOverdueNotifications($pdo);
         } catch (PDOException $e) {
             error_log('Database connection failed: ' . $e->getMessage());
             while (ob_get_level() > 0) {
@@ -105,6 +108,125 @@ if (!function_exists('ensureReservationCopyColumn')) {
             // Ignored if column already exists or table doesn't exist
         }
         $ensured = true;
+    }
+}
+
+if (!function_exists('ensureReservationDueDateColumn')) {
+    function ensureReservationDueDateColumn($db) {
+        static $ensured = false;
+        if ($ensured || !$db) return;
+        try {
+            $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'pgsql') {
+                $db->exec("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS due_date DATE NULL");
+            } else {
+                $check = $db->query("SHOW COLUMNS FROM reservations LIKE 'due_date'")->fetch();
+                if (!$check) {
+                    $db->exec("ALTER TABLE reservations ADD COLUMN due_date DATE NULL AFTER reservation_date");
+                }
+            }
+        } catch (Throwable $e) {
+        }
+        $ensured = true;
+    }
+}
+
+if (!function_exists('ensureNotificationsTable')) {
+    function ensureNotificationsTable($db) {
+        static $ensured = false;
+        if ($ensured || !$db) return;
+        try {
+            $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'pgsql') {
+                $db->exec("
+                    CREATE TABLE IF NOT EXISTS notifications (
+                        id SERIAL PRIMARY KEY,
+                        user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+                        type VARCHAR(50) NOT NULL DEFAULT 'general',
+                        title VARCHAR(255) NOT NULL,
+                        message TEXT NOT NULL,
+                        link VARCHAR(255) NULL,
+                        is_read SMALLINT NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
+                ");
+            } else {
+                $db->exec("
+                    CREATE TABLE IF NOT EXISTS notifications (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        user_id INT NOT NULL,
+                        type VARCHAR(50) NOT NULL DEFAULT 'general',
+                        title VARCHAR(255) NOT NULL,
+                        message TEXT NOT NULL,
+                        link VARCHAR(255) NULL,
+                        is_read TINYINT(1) NOT NULL DEFAULT 0,
+                        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_notifications_user (user_id, is_read)
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                ");
+            }
+        } catch (Throwable $e) {
+        }
+        $ensured = true;
+    }
+}
+
+if (!function_exists('checkAndCreateOverdueNotifications')) {
+    function checkAndCreateOverdueNotifications($db) {
+        static $checked = false;
+        if ($checked || !$db) return;
+        try {
+            // 1. Update status of any overdue borrowed records
+            $db->exec("UPDATE borrowing_records SET status = 'Overdue' WHERE status = 'Borrowed' AND due_date < CURRENT_DATE");
+
+            // 2. Find active overdue borrowings and ensure student has an overdue notification
+            $stmt = $db->query("
+                SELECT br.borrow_id, br.user_id, br.due_date, b.title AS book_title
+                FROM borrowing_records br
+                JOIN book_copies bc ON br.copy_id = bc.copy_id
+                JOIN books b ON bc.book_id = b.book_id
+                WHERE br.status = 'Overdue'
+            ");
+            $overdues = $stmt->fetchAll();
+            $todayStr = date('Y-m-d');
+            $todayTime = strtotime($todayStr);
+
+            foreach ($overdues as $ov) {
+                $dueTime = strtotime($ov['due_date']);
+                $daysOverdue = max(1, (int)floor(($todayTime - $dueTime) / 86400));
+                $fineAmount = $daysOverdue * 10.00;
+                $formattedDueDate = date('M d, Y', $dueTime);
+
+                // Check if notification already sent today for this book
+                $chk = $db->prepare("
+                    SELECT id FROM notifications 
+                    WHERE user_id = :uid 
+                      AND type = 'overdue' 
+                      AND title LIKE :title
+                      AND DATE(created_at) = CURRENT_DATE
+                    LIMIT 1
+                ");
+                $chk->execute([
+                    ':uid' => $ov['user_id'],
+                    ':title' => '%' . $ov['book_title'] . '%'
+                ]);
+
+                if (!$chk->fetch()) {
+                    $ins = $db->prepare("
+                        INSERT INTO notifications (user_id, type, title, message, link, is_read)
+                        VALUES (:uid, 'overdue', :title, :msg, 'borrowing', 0)
+                    ");
+                    $ins->execute([
+                        ':uid'   => $ov['user_id'],
+                        ':title' => "⚠️ Overdue Book: {$ov['book_title']}",
+                        ':msg'   => "Your borrowed book \"{$ov['book_title']}\" was due on {$formattedDueDate}. It is currently {$daysOverdue} day(s) overdue. A late penalty of ₱" . number_format($fineAmount, 2) . " has accumulated (₱10.00/day). Please return the book to the library counter immediately to avoid additional fees.",
+                    ]);
+                }
+            }
+        } catch (Throwable $e) {
+        }
+        $checked = true;
     }
 }
 

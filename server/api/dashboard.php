@@ -12,14 +12,15 @@ try {
     $userId   = $account['user_id'];
     $userRole = $account['role'];
 
-    // Update overdue records at most once every 5 minutes to avoid locking on every page view
-    if (in_array($userRole, ['Admin', 'Librarian'], true)) {
-        if (empty($_SESSION['overdue_checked_at']) || (time() - $_SESSION['overdue_checked_at'] > 300)) {
-            try {
-                $db->exec("UPDATE borrowing_records SET status='Overdue' WHERE status='Borrowed' AND due_date < CURRENT_DATE");
-                $_SESSION['overdue_checked_at'] = time();
-            } catch (Throwable $e) {}
-        }
+    // Ensure tables, due date column and overdue status check are maintained
+    if (function_exists('ensureNotificationsTable')) {
+        ensureNotificationsTable($db);
+    }
+    if (function_exists('ensureReservationDueDateColumn')) {
+        ensureReservationDueDateColumn($db);
+    }
+    if (function_exists('checkAndCreateOverdueNotifications')) {
+        checkAndCreateOverdueNotifications($db);
     }
 
     if ($userRole === 'User') {
@@ -99,7 +100,7 @@ try {
             // My current reservations (safe with copy_id fallback)
             try {
                 $stmt = $db->prepare("
-                    SELECT r.reservation_id, r.reservation_date, r.status, r.copy_id,
+                    SELECT r.reservation_id, r.reservation_date, r.due_date, r.status, r.copy_id,
                            bc.barcode AS reserved_barcode,
                            b.book_id, b.title AS book_title, b.author, c.category_name,
                            s.name AS student_name, s.student_number, u.full_name
@@ -196,8 +197,8 @@ try {
         ")->fetchAll();
 
         $pendingReservationsList = $db->query("
-            SELECT r.reservation_id, s.name AS student_name, u.full_name,
-                   b.title AS book_title, r.reservation_date, r.status
+            SELECT r.reservation_id, s.name AS student_name, s.student_number, u.full_name,
+                   b.title AS book_title, r.reservation_date, r.status, r.copy_id
             FROM reservations r
             JOIN users u ON r.user_id = u.user_id
             LEFT JOIN students s ON u.student_id = s.id

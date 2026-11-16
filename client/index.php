@@ -204,9 +204,34 @@ $displayRole  = ($currentUser['role'] === 'User') ? 'Student' : $currentUser['ro
                 </div>
             </div>
             <div class="flex items-center gap-4">
-                <div class="relative cursor-pointer" onclick="navigateTo('borrowing')">
-                    <i class="fa-regular fa-bell text-slate-500 text-base"></i>
-                    <span id="overdue-badge" class="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center hidden">0</span>
+                <!-- Notifications Dropdown -->
+                <div class="relative" id="notification-container">
+                    <button type="button" id="notification-bell-btn" onclick="toggleNotificationDropdown(event)" class="relative p-1.5 text-slate-500 hover:text-slate-800 transition-colors focus:outline-none cursor-pointer" aria-label="Notifications" title="Notifications & Alerts">
+                        <i class="fa-regular fa-bell text-base"></i>
+                        <span id="overdue-badge" class="absolute 0 right-0 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center hidden">0</span>
+                    </button>
+                    <!-- Dropdown Menu -->
+                    <div id="notification-dropdown" class="hidden absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-2xl border border-slate-200 z-50 overflow-hidden text-left">
+                        <div class="p-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-slate-800 text-sm">Notifications</span>
+                                <span id="notif-unread-pill" class="text-[10px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full hidden">0 new</span>
+                            </div>
+                            <button type="button" onclick="markAllNotificationsRead()" class="text-xs text-blue-600 hover:text-blue-800 font-semibold transition-colors">
+                                Mark all read
+                            </button>
+                        </div>
+                        <div id="notification-list" class="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                            <div class="p-6 text-center text-slate-400 text-xs">
+                                <i class="fa-regular fa-bell-slash text-2xl mb-2 block"></i> No notifications right now
+                            </div>
+                        </div>
+                        <div class="p-2.5 bg-slate-50 border-t border-slate-100 text-center">
+                            <button type="button" onclick="closeNotificationDropdown(); navigateTo('borrowing')" class="text-xs text-blue-600 hover:underline font-bold">
+                                View Borrowing & Overdue Records →
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 
                 <!-- User Profile & Logout -->

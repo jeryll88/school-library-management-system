@@ -239,11 +239,150 @@ function navigateTo(page) {
     };
 
     if (pages[page]) pages[page]();
+    loadNotifications();
 }
 
 window.navigate = navigateTo;
 window.navigateTo = navigateTo;
 window.addCopy = (...args) => addCopyModal(...args);
+
+// ─── NOTIFICATIONS & ALERTS ───────────────────────────────────────────────────
+
+let notificationsData = [];
+
+async function loadNotifications() {
+    try {
+        const res = await api('api/notifications.php');
+        notificationsData = res.data || [];
+        const unreadCount = res.unread_count || 0;
+
+        const badgeEl = document.getElementById('overdue-badge');
+        const pillEl = document.getElementById('notif-unread-pill');
+
+        if (badgeEl) {
+            if (unreadCount > 0) {
+                badgeEl.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                badgeEl.classList.remove('hidden');
+            } else {
+                badgeEl.classList.add('hidden');
+            }
+        }
+
+        if (pillEl) {
+            if (unreadCount > 0) {
+                pillEl.textContent = `${unreadCount} new`;
+                pillEl.classList.remove('hidden');
+            } else {
+                pillEl.classList.add('hidden');
+            }
+        }
+
+        renderNotificationList();
+    } catch (e) {
+        // Silently ignore if not logged in or endpoint busy
+    }
+}
+
+function renderNotificationList() {
+    const listEl = document.getElementById('notification-list');
+    if (!listEl) return;
+
+    if (!notificationsData || notificationsData.length === 0) {
+        listEl.innerHTML = `
+            <div class="p-6 text-center text-slate-400 text-xs">
+                <i class="fa-regular fa-bell-slash text-2xl mb-2 block text-slate-300"></i> No notifications right now
+            </div>`;
+        return;
+    }
+
+    listEl.innerHTML = notificationsData.map(n => {
+        const isOverdue = n.type === 'overdue';
+        const isApproved = n.type === 'reservation_approved';
+        const isUnread = Number(n.is_read) === 0;
+
+        const iconHtml = isOverdue
+            ? `<div class="w-8 h-8 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 text-sm shadow-2xs"><i class="fa-solid fa-triangle-exclamation"></i></div>`
+            : isApproved
+            ? `<div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0 text-sm shadow-2xs"><i class="fa-solid fa-circle-check"></i></div>`
+            : `<div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center shrink-0 text-sm shadow-2xs"><i class="fa-solid fa-bell"></i></div>`;
+
+        return `
+        <div onclick="clickNotificationItem(${n.id}, '${n.link || 'borrowing'}')" 
+             class="p-3.5 hover:bg-slate-50 transition-colors cursor-pointer flex items-start gap-3 ${isUnread ? 'bg-blue-50/40' : ''}">
+            ${iconHtml}
+            <div class="flex-1 min-w-0">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="font-bold text-xs ${isOverdue ? 'text-rose-700' : 'text-slate-800'} line-clamp-1">${escapeHtml(n.title)}</span>
+                    <span class="text-[10px] text-slate-400 whitespace-nowrap">${fmtTimeAgo(n.created_at)}</span>
+                </div>
+                <p class="text-xs text-slate-600 mt-0.5 leading-snug">${escapeHtml(n.message)}</p>
+            </div>
+            ${isUnread ? `<span class="w-2 h-2 rounded-full bg-blue-600 shrink-0 mt-1.5" title="Unread"></span>` : ''}
+        </div>`;
+    }).join('');
+}
+
+function fmtTimeAgo(dateStr) {
+    if (!dateStr) return '';
+    const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+    if (diff < 60) return 'Just now';
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function toggleNotificationDropdown(e) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById('notification-dropdown');
+    if (!dropdown) return;
+    const isHidden = dropdown.classList.contains('hidden');
+    if (isHidden) {
+        dropdown.classList.remove('hidden');
+        loadNotifications();
+    } else {
+        dropdown.classList.add('hidden');
+    }
+}
+
+function closeNotificationDropdown() {
+    const dropdown = document.getElementById('notification-dropdown');
+    if (dropdown) dropdown.classList.add('hidden');
+}
+
+async function markAllNotificationsRead() {
+    try {
+        await api('api/notifications.php', 'POST', { action: 'mark_all_read' });
+        toast('All notifications marked as read', 'info');
+        loadNotifications();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+async function clickNotificationItem(id, targetPage) {
+    try {
+        await api('api/notifications.php', 'POST', { id });
+    } catch (e) {}
+    closeNotificationDropdown();
+    loadNotifications();
+    if (targetPage && targetPage !== 'dashboard') {
+        navigateTo(targetPage);
+    }
+}
+
+// Close notification dropdown when clicking outside
+document.addEventListener('click', function(e) {
+    const container = document.getElementById('notification-container');
+    if (container && !container.contains(e.target)) {
+        closeNotificationDropdown();
+    }
+});
+
+window.toggleNotificationDropdown = toggleNotificationDropdown;
+window.closeNotificationDropdown = closeNotificationDropdown;
+window.markAllNotificationsRead = markAllNotificationsRead;
+window.clickNotificationItem = clickNotificationItem;
+window.loadNotifications = loadNotifications;
 
 // ─── DASHBOARD DISPATCHER ─────────────────────────────────────────────────────
 
@@ -322,6 +461,7 @@ function renderStudentDashboard(data) {
                     </span>
                 </div>
                 ${r.reserved_barcode ? `<div class="text-[10px] text-slate-500 font-normal mt-0.5"><i class="fa-solid fa-barcode mr-0.5 text-slate-400"></i>Held Copy: <span class="font-mono text-blue-600 font-semibold">${escapeHtml(r.reserved_barcode)}</span></div>` : ''}
+                ${r.due_date ? `<div class="text-[11px] text-emerald-700 font-bold mt-1 inline-flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"><i class="fa-regular fa-calendar-check text-emerald-600"></i>Return Due Date: <span>${fmt(r.due_date)}</span></div>` : ''}
             </td>
             <td class="text-slate-500">${fmt(r.reservation_date)}</td>
             <td>${badge(r.status)}</td>
@@ -579,7 +719,7 @@ function renderLibrarianDashboard(data) {
             <td class="text-slate-500">${fmt(r.reservation_date)}</td>
             <td><span class="badge badge-pending">Pending</span></td>
             <td class="text-center space-x-1">
-                <button onclick="updateReservationStatus(${r.reservation_id}, 'Approved')" title="Approve Reservation (Decreases Available Stock by 1)" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] px-2.5 py-1 rounded border border-emerald-300 shadow-2xs">
+                <button onclick="approveReservationModal(${r.reservation_id}, '${escapeHtml(r.book_title).replace(/'/g, "\\'")}', '${escapeHtml(r.student_name || r.full_name || '').replace(/'/g, "\\'")}', '${escapeHtml(r.student_number || '').replace(/'/g, "\\'")}')" title="Approve Reservation & Set Return Due Date" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[10px] px-2.5 py-1 rounded border border-emerald-300 shadow-2xs">
                     <i class="fa-solid fa-check mr-0.5"></i> Approve
                 </button>
                 <button onclick="updateReservationStatus(${r.reservation_id}, 'Rejected')" title="Reject Reservation" class="bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-[10px] px-2.5 py-1 rounded border border-rose-300 shadow-2xs">
@@ -930,15 +1070,16 @@ async function cancelMyReservation(reservationId) {
     }
 }
 
-async function updateReservationStatus(reservationId, newStatus) {
+async function updateReservationStatus(reservationId, newStatus, bookTitle = '', studentName = '', studentNumber = '') {
+    if (newStatus === 'Approved') {
+        return approveReservationModal(reservationId, bookTitle, studentName, studentNumber);
+    }
     if (newStatus === 'Fulfilled') {
         return updateReservation(reservationId, 'Fulfilled');
     }
     try {
         await api(`api/reservations.php?id=${reservationId}`, 'PUT', { status: newStatus });
-        if (newStatus === 'Approved') {
-            toast('Reservation approved! Book stock decreased by 1.', 'success');
-        } else if (newStatus === 'Rejected') {
+        if (newStatus === 'Rejected') {
             toast('Reservation rejected.', 'info');
         } else {
             toast(`Reservation marked as ${newStatus}.`);
@@ -1922,9 +2063,13 @@ async function renderReservations(page = 1, search = '', status = '') {
                     </span>
                 </div>
                 ${r.reserved_barcode ? `<div class="text-[11px] text-slate-500 font-normal mt-0.5"><i class="fa-solid fa-barcode text-slate-400 mr-1"></i>Reserved Copy: <span class="font-mono font-semibold text-blue-600">${escapeHtml(r.reserved_barcode)}</span></div>` : ''}
+                ${r.due_date ? `<div class="text-[11px] text-emerald-700 font-bold mt-1 inline-flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"><i class="fa-regular fa-calendar-check text-emerald-600"></i>Return Due Date: <span>${fmt(r.due_date)}</span></div>` : ''}
             </td>
             <td class="text-slate-500">${fmt(r.reservation_date)}</td>
-            <td>${badge(r.status)}</td>
+            <td>
+                ${badge(r.status)}
+                ${r.status === 'Approved' && r.due_date ? `<div class="text-[10px] text-emerald-700 font-bold mt-0.5"><i class="fa-regular fa-clock mr-0.5"></i>Due ${fmt(r.due_date)}</div>` : ''}
+            </td>
             <td class="text-center space-x-1">
                 ${isStudent ? `
                     ${r.status === 'Pending' || r.status === 'Approved' ? `
@@ -1934,7 +2079,7 @@ async function renderReservations(page = 1, search = '', status = '') {
                     ` : '<span class="text-slate-400 text-xs">—</span>'}
                 ` : `
                     ${r.status === 'Pending' ? `
-                    <button onclick="updateReservation(${r.reservation_id},'Approved')" title="Approve & Deduct 1 from stock" class="inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs px-2.5 py-1 rounded-md border border-emerald-300 transition-colors shadow-2xs">
+                    <button onclick="approveReservationModal(${r.reservation_id}, '${escapeHtml(r.book_title).replace(/'/g, "\\'")}', '${escapeHtml(r.student_name || r.full_name || '').replace(/'/g, "\\'")}', '${escapeHtml(r.student_number || '').replace(/'/g, "\\'")}')" title="Approve & Set Return Due Date" class="inline-flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs px-2.5 py-1 rounded-md border border-emerald-300 transition-colors shadow-2xs">
                         <i class="fa-solid fa-check"></i> Approve
                     </button>
                     <button onclick="updateReservation(${r.reservation_id},'Rejected')" title="Reject Reservation" class="inline-flex items-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs px-2.5 py-1 rounded-md border border-rose-300 transition-colors shadow-2xs">
@@ -2085,7 +2230,11 @@ async function submitAddReservation(e) {
     } catch(err) { toast(err.message, 'error'); }
 }
 
-async function updateReservation(id, status) {
+async function updateReservation(id, status, bookTitle = '', studentName = '', studentNumber = '') {
+    // When approving, prompt staff with the return due date modal
+    if (status === 'Approved') {
+        return approveReservationModal(id, bookTitle, studentName, studentNumber);
+    }
     // When fulfilling, prompt staff to set borrow date and due date
     if (status === 'Fulfilled') {
         const today = new Date().toISOString().slice(0, 10);
@@ -2151,6 +2300,126 @@ async function submitFulfillReservation(e, reservationId) {
         }
     } catch(err) { toast(err.message, 'error'); }
 }
+
+function approveReservationModal(reservationId, bookTitle = '', studentName = '', studentNumber = '') {
+    const today = new Date().toISOString().slice(0, 10);
+    const defaultDueDate = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    const d3 = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+    const d7 = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const d14 = defaultDueDate;
+    const d30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+
+    showModal(`
+    <div class="modal-overlay">
+      <div class="modal-box max-w-md">
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-blue-50">
+            <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                <i class="fa-solid fa-circle-check text-emerald-600 text-lg"></i> Approve Reservation & Set Return Due Date
+            </h3>
+            <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <form class="px-6 py-5 space-y-4" onsubmit="submitApproveReservation(event, ${reservationId})">
+            <!-- Reservation info card -->
+            <div class="p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-2 text-xs">
+                <div class="flex items-start justify-between gap-2">
+                    <span class="text-slate-500 font-medium">Book Title:</span>
+                    <strong class="text-slate-900 font-bold text-right">${escapeHtml(bookTitle || 'Selected Book')}</strong>
+                </div>
+                ${studentName ? `
+                <div class="flex items-start justify-between gap-2">
+                    <span class="text-slate-500 font-medium">Student / Borrower:</span>
+                    <span class="text-slate-800 font-semibold text-right">${escapeHtml(studentName)} ${studentNumber ? `(${escapeHtml(studentNumber)})` : ''}</span>
+                </div>` : ''}
+                <div class="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-200/60">
+                    <span class="text-slate-500 font-medium">Reservation Reference:</span>
+                    <span class="font-mono font-bold text-blue-700">R${String(reservationId).padStart(3, '0')}</span>
+                </div>
+            </div>
+
+            <!-- Borrow & Return Date Inputs -->
+            <div class="space-y-3">
+                <div>
+                    <label class="form-label font-bold text-slate-800 flex items-center justify-between">
+                        <span>Borrow / Issue Date *</span>
+                        <span class="text-[11px] text-slate-400 font-normal">Defaults to today</span>
+                    </label>
+                    <input type="date" name="borrow_date" id="approve-borrow-date" required class="form-input" value="${today}">
+                </div>
+
+                <div>
+                    <label class="form-label font-bold text-slate-800 flex items-center justify-between">
+                        <span class="flex items-center gap-1.5">
+                            <i class="fa-solid fa-calendar-days text-emerald-600"></i>
+                            <span>Return Due Date *</span>
+                        </span>
+                        <span class="text-[11px] text-emerald-600 font-semibold">Expected Return Date</span>
+                    </label>
+                    <input type="date" name="due_date" id="approve-due-date" required min="${today}" class="form-input font-semibold text-slate-900 border-emerald-300 focus:border-emerald-500 focus:ring-emerald-500" value="${defaultDueDate}">
+                    
+                    <!-- Quick preset buttons -->
+                    <div class="flex items-center gap-1.5 mt-2 flex-wrap">
+                        <span class="text-[10px] text-slate-400 font-bold uppercase mr-1">Presets:</span>
+                        <button type="button" onclick="document.getElementById('approve-due-date').value='${d3}'" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer">3 Days</button>
+                        <button type="button" onclick="document.getElementById('approve-due-date').value='${d7}'" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer">1 Week (7d)</button>
+                        <button type="button" onclick="document.getElementById('approve-due-date').value='${d14}'" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold transition-colors cursor-pointer">2 Weeks (14d)</button>
+                        <button type="button" onclick="document.getElementById('approve-due-date').value='${d30}'" class="text-[11px] font-semibold px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer">1 Month (30d)</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overdue & Penalty Warning Policy Box -->
+            <div class="bg-amber-50 border border-amber-200/90 rounded-xl p-3 text-xs text-amber-900 space-y-1">
+                <div class="font-bold flex items-center gap-1.5 text-amber-950">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-600"></i> Overdue & Penalty Notification Policy
+                </div>
+                <p class="text-[11px] text-amber-800 leading-relaxed">
+                    If this book is not returned on or before the specified due date, the system will automatically mark the record <strong>Overdue</strong>, send an alert notification to the student, and calculate an overdue penalty of <strong>₱10.00 per day</strong> to be paid at the counter upon return.
+                </p>
+            </div>
+
+            <div class="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+                <button type="button" onclick="closeModal()" class="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">Cancel</button>
+                <button type="submit" class="px-4 py-2 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors shadow-2xs flex items-center gap-1.5 cursor-pointer">
+                    <i class="fa-solid fa-check"></i> Confirm & Approve Loan
+                </button>
+            </div>
+        </form>
+      </div>
+    </div>`);
+}
+
+async function submitApproveReservation(e, reservationId) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const borrowDate = fd.get('borrow_date');
+    const dueDate = fd.get('due_date');
+
+    if (!dueDate) {
+        toast('Please specify a valid return due date.', 'error');
+        return;
+    }
+
+    try {
+        await api(`api/reservations.php?id=${reservationId}`, 'PUT', {
+            status: 'Approved',
+            borrow_date: borrowDate,
+            due_date: dueDate
+        });
+        closeModal();
+        toast(`Reservation approved! Book due on ${fmt(dueDate)}. Student has been notified. 🎉`, 'success');
+        if (State.currentPage === 'dashboard') {
+            renderDashboard();
+        } else {
+            renderReservations();
+        }
+        loadNotifications();
+    } catch (err) {
+        toast(err.message, 'error');
+    }
+}
+
+window.approveReservationModal = approveReservationModal;
+window.submitApproveReservation = submitApproveReservation;
 
 async function deleteReservation(id) {
     if (!confirm('Delete this reservation?')) return;
