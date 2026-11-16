@@ -20,26 +20,10 @@ $method   = $_SERVER['REQUEST_METHOD'];
 $currUser = $account['user_id'];
 $currRole = $account['role'];
 
-// Ensure reservations table has copy_id column for stock deduction
-function ensureReservationCopyColumn($db) {
-    static $ensured = false;
-    if ($ensured) return;
-    try {
-        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'pgsql') {
-            $db->exec("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS copy_id INTEGER REFERENCES book_copies(copy_id) ON DELETE SET NULL");
-        } else {
-            $check = $db->query("SHOW COLUMNS FROM reservations LIKE 'copy_id'")->fetch();
-            if (!$check) {
-                $db->exec("ALTER TABLE reservations ADD COLUMN copy_id INT NULL");
-            }
-        }
-    } catch (Exception $e) {
-        // Ignored if column already exists
-    }
-    $ensured = true;
+// Ensure reservations table has copy_id column for stock deduction (defined in db.php)
+if (function_exists('ensureReservationCopyColumn')) {
+    ensureReservationCopyColumn($db);
 }
-ensureReservationCopyColumn($db);
 
 switch ($method) {
     case 'GET':

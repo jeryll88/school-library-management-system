@@ -67,8 +67,7 @@ switch ($method) {
         $stmt = $db->prepare("
             SELECT br.borrow_id, br.borrow_date, br.due_date, br.return_date, br.status,
                    s.name AS student_name, u.full_name,
-                   b.title AS book_title, bc.barcode, bc.copy_id,
-                   CONCAT('C', LPAD(bc.copy_id,3,'0'), ' - ', b.title) AS copy_label
+                   b.title AS book_title, bc.barcode, bc.copy_id
             FROM borrowing_records br
             JOIN users u ON br.user_id = u.user_id
             LEFT JOIN students s ON u.student_id = s.id
@@ -82,7 +81,12 @@ switch ($method) {
         $stmt->bindValue(':limit',  $limit,  PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
         $stmt->execute();
-        jsonResponse(['data' => $stmt->fetchAll(), 'total' => $total, 'page' => $page, 'limit' => $limit]);
+        $records = $stmt->fetchAll();
+        foreach ($records as &$r) {
+            $r['copy_label'] = 'C' . str_pad($r['copy_id'] ?? 0, 3, '0', STR_PAD_LEFT) . ' - ' . ($r['book_title'] ?? '');
+        }
+        unset($r);
+        jsonResponse(['data' => $records, 'total' => $total, 'page' => $page, 'limit' => $limit]);
         break;
 
     case 'POST':

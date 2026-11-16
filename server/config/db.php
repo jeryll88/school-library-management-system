@@ -82,23 +82,25 @@ function getDB() {
     return $pdo;
 }
 
-function ensureReservationCopyColumn($db) {
-    static $ensured = false;
-    if ($ensured || !$db) return;
-    try {
-        $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
-        if ($driver === 'pgsql') {
-            $db->exec("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS copy_id INTEGER REFERENCES book_copies(copy_id) ON DELETE SET NULL");
-        } else {
-            $check = $db->query("SHOW COLUMNS FROM reservations LIKE 'copy_id'")->fetch();
-            if (!$check) {
-                $db->exec("ALTER TABLE reservations ADD COLUMN copy_id INT NULL");
+if (!function_exists('ensureReservationCopyColumn')) {
+    function ensureReservationCopyColumn($db) {
+        static $ensured = false;
+        if ($ensured || !$db) return;
+        try {
+            $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
+            if ($driver === 'pgsql') {
+                $db->exec("ALTER TABLE reservations ADD COLUMN IF NOT EXISTS copy_id INTEGER REFERENCES book_copies(copy_id) ON DELETE SET NULL");
+            } else {
+                $check = $db->query("SHOW COLUMNS FROM reservations LIKE 'copy_id'")->fetch();
+                if (!$check) {
+                    $db->exec("ALTER TABLE reservations ADD COLUMN copy_id INT NULL");
+                }
             }
+        } catch (Throwable $e) {
+            // Ignored if column already exists or table doesn't exist
         }
-    } catch (Throwable $e) {
-        // Ignored if column already exists or table doesn't exist
+        $ensured = true;
     }
-    $ensured = true;
 }
 
 function getDbDriver() {
