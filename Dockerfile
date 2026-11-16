@@ -18,14 +18,16 @@ RUN apt-get update && apt-get install -y \
 # Enable Apache mod_rewrite
 RUN a2enmod rewrite
 
-# Set Apache DocumentRoot
+# Set Apache DocumentRoot and Port
 ENV APACHE_DOCUMENT_ROOT=/var/www/html
+ENV PORT=80
 
-# Configure Apache DocumentRoot in virtual hosts
+# Configure Apache DocumentRoot and Port in virtual hosts
 RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
 RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+RUN sed -ri -e 's!80!${PORT}!g' /etc/apache2/ports.conf /etc/apache2/sites-available/*.conf
 
-# Configure custom port binding if PORT environment variable is passed by Render (default 80)
+# Configure custom ServerName
 RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
 # Copy project files into web root
