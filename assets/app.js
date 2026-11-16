@@ -289,11 +289,14 @@ function renderStudentDashboard(data) {
     const reservationRows = myReservations.map((r, i) => `
         <tr>
             <td class="font-bold text-slate-500">${i + 1}</td>
-            <td class="font-semibold text-slate-800">${escapeHtml(r.book_title)}</td>
+            <td class="font-semibold text-slate-800">
+                ${escapeHtml(r.book_title)}
+                ${r.reserved_barcode ? `<div class="text-[10px] text-slate-400 font-normal"><i class="fa-solid fa-barcode mr-0.5"></i>Copy: <span class="font-mono text-blue-600 font-semibold">${escapeHtml(r.reserved_barcode)}</span></div>` : ''}
+            </td>
             <td class="text-slate-500">${fmt(r.reservation_date)}</td>
             <td>${badge(r.status)}</td>
             <td class="text-center">
-                ${r.status === 'Pending' ? `
+                ${r.status === 'Pending' || r.status === 'Approved' ? `
                     <button onclick="cancelMyReservation(${r.reservation_id})" class="text-xs text-rose-600 hover:text-rose-800 font-semibold px-2 py-0.5 rounded border border-rose-200 hover:bg-rose-50 transition-colors">
                         Cancel
                     </button>
@@ -1629,22 +1632,26 @@ async function renderReservations(page = 1, search = '', status = '') {
         <tr>
             <td class="font-bold text-blue-600">R${String(r.reservation_id).padStart(3,'0')}</td>
             ${!isStudent ? `<td class="font-semibold text-slate-800">${escapeHtml(r.student_name || r.full_name || '—')}</td>` : ''}
-            <td class="text-slate-800 font-medium">${escapeHtml(r.book_title)}</td>
+            <td class="text-slate-800 font-medium">
+                ${escapeHtml(r.book_title)}
+                ${r.reserved_barcode ? `<div class="text-[11px] text-slate-500 font-normal mt-0.5"><i class="fa-solid fa-barcode text-slate-400 mr-1"></i>Reserved Copy: <span class="font-mono font-semibold text-blue-600">${escapeHtml(r.reserved_barcode)}</span></div>` : ''}
+            </td>
             <td class="text-slate-500">${fmt(r.reservation_date)}</td>
             <td>${badge(r.status)}</td>
             <td class="text-center space-x-1">
                 ${isStudent ? `
-                    ${r.status === 'Pending' ? `
+                    ${r.status === 'Pending' || r.status === 'Approved' ? `
                         <button onclick="cancelMyReservation(${r.reservation_id})" class="text-xs text-rose-600 hover:text-rose-800 font-semibold px-2 py-0.5 rounded border border-rose-200 hover:bg-rose-50 transition-colors">
                             Cancel
                         </button>
                     ` : '<span class="text-slate-400 text-xs">—</span>'}
                 ` : `
                     ${r.status === 'Pending' ? `
-                    <button onclick="updateReservation(${r.reservation_id},'Approved')" title="Approve" class="text-slate-400 hover:text-emerald-600 transition-colors"><i class="fa-solid fa-check"></i></button>
+                    <button onclick="updateReservation(${r.reservation_id},'Approved')" title="Approve & Reserve Stock" class="text-slate-400 hover:text-emerald-600 transition-colors"><i class="fa-solid fa-check"></i></button>
                     <button onclick="updateReservation(${r.reservation_id},'Cancelled')" title="Cancel" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark"></i></button>` : ''}
                     ${r.status === 'Approved' ? `
-                    <button onclick="updateReservation(${r.reservation_id},'Fulfilled')" title="Fulfilled" class="text-slate-400 hover:text-blue-600 transition-colors"><i class="fa-solid fa-circle-check"></i></button>` : ''}
+                    <button onclick="updateReservation(${r.reservation_id},'Fulfilled')" title="Fulfilled" class="text-slate-400 hover:text-blue-600 transition-colors"><i class="fa-solid fa-circle-check"></i></button>
+                    <button onclick="updateReservation(${r.reservation_id},'Cancelled')" title="Cancel & Return Stock" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-solid fa-xmark"></i></button>` : ''}
                     <button onclick="deleteReservation(${r.reservation_id})" title="Delete" class="text-slate-400 hover:text-rose-500 transition-colors"><i class="fa-regular fa-trash-can text-xs"></i></button>
                 `}
             </td>

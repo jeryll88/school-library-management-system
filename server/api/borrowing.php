@@ -125,12 +125,28 @@ switch ($method) {
             ], 400);
         }
 
-        // Check copy is available
+        // Check copy status
         $copyStmt = $db->prepare("SELECT status FROM book_copies WHERE copy_id = :id");
         $copyStmt->execute([':id' => $input['copy_id']]);
         $copy = $copyStmt->fetch();
         if (!$copy) jsonResponse(['error' => 'Book copy not found'], 404);
-        if ($copy['status'] !== 'Available') jsonResponse(['error' => 'Book copy is not available'], 409);
+
+        // If copy is Reserved, verify whether it belongs to an Approved reservation for this student
+        $resStmt = $db->prepare("
+            SELECT reservation_id FROM reservations 
+            WHERE copy_id = :copy_id AND user_id = :user_id AND status = 'Approved'
+            LIMIT 1
+        ");
+        $resStmt->execute([':copy_id' => $input['copy_id'], ':user_id' => $input['user_id']]);
+        $approvedRes = $resStmt->fetch();
+
+        if ($copy['status'] === 'Reserved') {
+            if (!$approvedRes) {
+                jsonResponse(['error' => 'This copy is currently reserved for another student.'], 409);
+            }
+        } elseif ($copy['status'] !== 'Available') {
+            jsonResponse(['error' => "Book copy is not available (Current status: {$copy['status']})"], 409);
+        }
 
         // Create borrowing record
         $stmt = $db->prepare("
@@ -146,9 +162,15 @@ switch ($method) {
         ]);
         $borrowId = $db->lastInsertId();
 
-        // Update copy status
+        // Update copy status to Borrowed
         $db->prepare("UPDATE book_copies SET status='Borrowed' WHERE copy_id=:id")
            ->execute([':id' => $input['copy_id']]);
+
+        // If this copy had an approved reservation for this student, mark the reservation as Fulfilled
+        if ($approvedRes) {
+            $db->prepare("UPDATE reservations SET status='Fulfilled' WHERE reservation_id = :rid")
+               ->execute([':rid' => $approvedRes['reservation_id']]);
+        }
 
         jsonResponse(['success' => true, 'borrow_id' => $borrowId], 201);
         break;

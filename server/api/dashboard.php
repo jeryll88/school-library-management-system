@@ -74,11 +74,13 @@ if ($userRole === 'User') {
 
         // My current reservations
         $stmt = $db->prepare("
-            SELECT r.reservation_id, r.reservation_date, r.status,
+            SELECT r.reservation_id, r.reservation_date, r.status, r.copy_id,
+                   bc.barcode AS reserved_barcode,
                    b.book_id, b.title AS book_title, b.author, c.category_name
             FROM reservations r
             JOIN books b ON r.book_id = b.book_id
             LEFT JOIN categories c ON b.category_id = c.category_id
+            LEFT JOIN book_copies bc ON r.copy_id = bc.copy_id
             WHERE r.user_id = :uid
             ORDER BY r.reservation_date DESC
             LIMIT 5
