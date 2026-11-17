@@ -118,7 +118,7 @@ try {
                 $myReservations = $stmt->fetchAll();
             } catch (Throwable $e) {
                 $stmt = $db->prepare("
-                    SELECT r.reservation_id, r.reservation_date, r.status, NULL AS copy_id,
+                    SELECT r.reservation_id, r.reservation_date, NULL AS due_date, r.status, NULL AS copy_id,
                            NULL AS reserved_barcode,
                            b.book_id, b.title AS book_title, b.author, c.category_name,
                            u.full_name AS student_name, NULL AS student_number, u.full_name
@@ -195,6 +195,28 @@ try {
             ORDER BY br.borrow_id DESC
             LIMIT 6
         ")->fetchAll();
+
+        $today = new DateTime('today');
+        foreach ($recentActivity as &$ra) {
+            $dueDate = $ra['due_date'] ?? null;
+            $returnDate = $ra['return_date'] ?? null;
+            $overdueDays = 0;
+            if ($dueDate) {
+                $dueObj = new DateTime($dueDate);
+                if ($ra['status'] === 'Returned' && $returnDate) {
+                    $retObj = new DateTime($returnDate);
+                    if ($retObj > $dueObj) {
+                        $overdueDays = max(0, (int)$dueObj->diff($retObj)->format('%a'));
+                    }
+                } elseif ($today > $dueObj && in_array($ra['status'], ['Borrowed', 'Overdue'])) {
+                    $overdueDays = max(0, (int)$dueObj->diff($today)->format('%a'));
+                }
+            }
+            $ra['overdue_days'] = $overdueDays;
+            $ra['fine_rate']    = 10;
+            $ra['fine_amount']  = $overdueDays * 10;
+        }
+        unset($ra);
 
         $pendingReservationsList = $db->query("
             SELECT r.reservation_id, s.name AS student_name, s.student_number, u.full_name,

@@ -267,7 +267,7 @@ switch ($method) {
             }
 
             // Fetch existing reservation details
-            $resStmt = $db->prepare("SELECT reservation_id, book_id, user_id, copy_id, status FROM reservations WHERE reservation_id = :id");
+            $resStmt = $db->prepare("SELECT reservation_id, book_id, user_id, copy_id, status, due_date FROM reservations WHERE reservation_id = :id");
             $resStmt->execute([':id' => $id]);
             $res = $resStmt->fetch();
 
@@ -280,10 +280,7 @@ switch ($method) {
             $existingCopyId  = $res['copy_id'];
 
             if ($newStatus === 'Approved') {
-                $borrowDate = !empty($input['borrow_date']) ? trim($input['borrow_date']) : date('Y-m-d');
-                $dueDate    = !empty($input['due_date']) ? trim($input['due_date']) : date('Y-m-d', strtotime('+14 days'));
-
-                // Ensure copy is assigned
+                // Ensure copy is assigned and marked Reserved
                 if (empty($existingCopyId)) {
                     $findCopy = $db->prepare("
                         SELECT copy_id FROM book_copies 
@@ -349,23 +346,8 @@ switch ($method) {
                         ':due'    => $dueDate,
                     ]);
                 }
-
-                // Send in-app notification to student
-                try {
-                    $bTitleStmt = $db->prepare("SELECT title FROM books WHERE book_id = :bid");
-                    $bTitleStmt->execute([':bid' => $bookId]);
-                    $bookTitle = $bTitleStmt->fetchColumn() ?: 'Reserved Book';
-                    $formattedDueDate = date('M d, Y', strtotime($dueDate));
-
-                    $db->prepare("
-                        INSERT INTO notifications (user_id, type, title, message, link)
-                        VALUES (:uid, 'reservation_approved', :title, :msg, 'borrowing')
-                    ")->execute([
-                        ':uid'   => (int)$res['user_id'],
-                        ':title' => "Reservation Approved: {$bookTitle}",
-                        ':msg'   => "Your reservation for \"{$bookTitle}\" has been approved! The book is issued to you and must be returned on or before {$formattedDueDate}. Late returns incur a penalty fee of ₱10.00 per day overdue.",
-                    ]);
-                } catch (Throwable $e) {}
+                $stmt = $db->prepare("UPDATE reservations SET status = 'Approved', copy_id = :copy_id WHERE reservation_id = :id");
+                $stmt->execute([':copy_id' => $existingCopyId, ':id' => $id]);
 
             } elseif (in_array($newStatus, ['Cancelled', 'Rejected'], true)) {
                 // If Cancelled or Rejected: release copy back to Available (stock increases by 1)
@@ -446,7 +428,9 @@ switch ($method) {
 
                 $targetUid = (int)$res['user_id'];
                 $borrowDate = !empty($input['borrow_date']) ? $input['borrow_date'] : date('Y-m-d');
-                $dueDate = !empty($input['due_date']) ? $input['due_date'] : date('Y-m-d', strtotime('+14 days'));
+                $dueDate = !empty($input['due_date']) 
+                    ? $input['due_date'] 
+                    : (!empty($res['due_date']) ? $res['due_date'] : date('Y-m-d', strtotime('+14 days')));
 
                 $driver = $db->getAttribute(PDO::ATTR_DRIVER_NAME);
                 if ($driver === 'pgsql') {
